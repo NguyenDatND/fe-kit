@@ -6,8 +6,8 @@ import { parseArgs } from 'node:util'
 import { UsageError } from '../src/lib/errors.mjs'
 
 const kitRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-const AVAILABLE = ['context', 'init', 'validate', 'scan', 'rules', 'test', 'verify', 'auth', 'ui']
-const PLANNED = ['dev', 'ui-act', 'mr', 'mcp', 'mcp-run', 'secrets', 'link', 'unlink', 'doctor']
+const AVAILABLE = ['context', 'init', 'validate', 'scan', 'rules', 'test', 'verify', 'auth', 'ui', 'dev', 'ui-act']
+const PLANNED = ['mr', 'mcp', 'mcp-run', 'secrets', 'link', 'unlink', 'doctor']
 
 const HELP = `fe-kit: frontend kit for Claude Code, Codex and Antigravity
 
@@ -23,6 +23,8 @@ Commands:
   verify     scan, lint, type-check, project tests and local tests, with a report
   auth       save a login for a role (you log in once, in a browser window) and check it
   ui         look at the target in a browser: pictures, console errors, failed requests, steps
+  dev        start, stop and check the dev server of a target, in the background
+  ui-act     like ui, but lets one write request through (not enabled yet: it needs shell-guard)
 
 Not implemented yet: ${PLANNED.join(', ')}
 

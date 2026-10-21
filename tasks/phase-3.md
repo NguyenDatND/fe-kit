@@ -1,7 +1,7 @@
 # Phase 3 — Xem UI thật
 
 Nguồn: `docs/plan.md` §10 Phase 3, §5.3 (lệnh `auth`, `dev`, `ui`, `ui-act`), §5.4 (`targets`, `roles`), §5.8 (mô hình đe doạ), `docs/spike.md` S5, S6, S12.
-Trạng thái: **kế hoạch đã qua review Codex 2 lượt (7 điểm rồi 4 điểm, đều đã đưa vào dưới đây), chờ bạn duyệt trước khi viết code.**
+Trạng thái: **phần lõi xong (2026-10-21)**: `auth`, `dev`, `ui`, chính sách request, bộ chặn, skill `fe-ui-check`, nghiệm thu headless trên sandbox (`docs/acceptance/phase-3.md`). Kế hoạch qua 2 lượt review Codex; code qua 3 lượt (xem cuối file). **Còn lại để "Phase 3 xong hẳn":** nghiệm thu `ui-act` với hộp hỏi của `shell-guard` và chạy `ui` trong Codex, cả hai sau `shell-guard`/`link` của Phase 1.
 
 ## Mục tiêu (tiêu chí xong)
 
@@ -77,3 +77,23 @@ Hộp hỏi `ui-act` (cần `shell-guard`), chạy trong sandbox Codex (cần `l
 - `route.fetch` chạy request từ Node chứ không từ trình duyệt, nên một request ghi được phép có thể khác chút (CORS, một số header) so với lúc người dùng thật gửi. Chỉ áp dụng cho request ghi đã được cho phép, hiếm.
 - `storageState` là bí mật: agent cùng tài khoản đọc được (mô hình §5.8). Lệnh của kit không in cookie hay token, và test phải chứng minh điều đó.
 - Test có trình duyệt chậm và phụ thuộc máy; giữ ít và tách khỏi test logic.
+
+## Review Codex cho code (3 lượt, 2026-10-21; `spike/review/r13-report.md`, `r14-report.md`, `r15-report.md`)
+
+| Lượt | Kết quả | Việc đã làm |
+|---|---|---|
+| 13 | 1 BLOCKER + 6 MAJOR | `pageshow` giả tắt lớp chặn lúc dỡ trang (chỉ nhận sự kiện thật); bí mật lọt ra đầu ra (`scrub.mjs`); `dev.log`/`dev.pid` ghi xuyên symlink; start/stop đồng thời (khoá); đường đọc phiên bỏ qua symlink thư mục cha và quyền; lỗi guard/transport vẫn thoát 0 (`problemsOf`, dòng `Result:`); kiểm phiên cuối bị bỏ khi một bước hỏng |
+| 14 | 1 BLOCKER + 5 MAJOR + 1 MINOR (và chưa hết điểm 2, 3, 4 cũ) | `Function.prototype.apply` đưa `fetch` gốc cho trang; **iframe cùng origin có cờ dỡ trang riêng (tôi tự tìm thấy khi thí nghiệm)**; khoá công bố nguyên tử; rollback sau spawn; URL có query ở đường xuất của `dev` và `auth`; JSON và IndexedDB trong `scrub`; lọc theo schema thay cho lọc cả kết quả; regex JWT/URL bậc hai; log cũ quyền 0644 |
+| 15 (cuối) | 2 BLOCKER + 4 MAJOR + 1 MINOR | `window.parent` thay được (chụp trước, cờ ba trạng thái, frame khác origin chỉ cho đọc thuần); `document.open()` xoá listener (bọc `open`/`write`/`writeln`); record cũ có query; JSON có escape và dạng JSON của bí mật đã biết; selector/path/evidence còn sót; JWE khoá rỗng và JWT cuối câu. **MINOR chưa sửa:** hai lời gọi `withLock` tiếp quản cùng một khoá cũ trong một tiến trình sống lâu có thể để lại khoá bị coi là sống (CLI không bị: tiến trình thoát thì khoá hết hiệu lực) |
+
+Sau lượt 15 tôi không gửi thêm lượt thứ tư (đã hết 3 lượt cho code). Mọi điểm đã sửa có test đỏ trước và mutation (các mutant tương đương còn sống được ghi trong `tasks/lessons.md`).
+
+## Giới hạn đã biết của phần lõi
+
+- Một GET có tác dụng phụ không chặn được; script Playwright agent tự viết nằm ngoài bộ chặn; Windows chưa hỗ trợ (`dev`) hoặc chưa kiểm.
+- `credentials: 'omit'` bị từ chối khi phiên có cookie (`route.fetch` luôn gắn cookie).
+- Bộ lọc bí mật không hoàn hảo: bí mật kit không biết, ở dạng không nhận ra, vẫn có thể lọt.
+- Khoá của `dev` là khoá bằng file (Node không có khoá hệ điều hành): ba lệnh cùng một khoảnh khắc vẫn có thể thắng nhau; xem điểm MINOR lượt 15.
+- Trang cần WebSocket sẽ trông hỏng trên đích chỉ đọc (Vite HMR báo lỗi kết nối).
+- `ui-act` chưa bật; `auth login` tương tác chỉ kiểm bằng trình duyệt giả, bạn nên thử một lần thật.
+

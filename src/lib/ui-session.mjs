@@ -30,8 +30,10 @@ export async function checkSession({ page, context, origin, config, settleMs = 3
     try {
       // A GET, so it passes any guard; redirects are not followed, so a 302 is only what a profile lists.
       const response = await context.request.get(new URL(config.probe.path, origin).href, { maxRedirects: 0, timeout: 5000 })
-      if (config.probe.expired.includes(response.status())) expired.push(`the probe ${config.probe.path} answered ${response.status()}`)
-      else if (config.probe.loggedIn.includes(response.status())) alive.push(`the probe ${config.probe.path} answered ${response.status()}`)
+      // Told by its path only: the address of the probe can carry a token in its query string.
+      const probe = new URL(config.probe.path, origin).pathname
+      if (config.probe.expired.includes(response.status())) expired.push(`the probe ${probe} answered ${response.status()}`)
+      else if (config.probe.loggedIn.includes(response.status())) alive.push(`the probe ${probe} answered ${response.status()}`)
     } catch {
       // No answer is no evidence.
     }

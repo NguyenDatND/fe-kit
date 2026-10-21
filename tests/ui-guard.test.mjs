@@ -16,6 +16,17 @@ async function startServer() {
       const body = Buffer.concat(chunks)
       requests.push({ method: req.method, url: req.url, type: req.headers['content-type'], cookie: req.headers.cookie ?? null, body })
       if (req.method === 'GET' && req.url === '/') return res.end('<!doctype html><title>t</title>ok')
+      if (req.method === 'GET' && req.url === '/frame') {
+        res.setHeader('content-type', 'text/html')
+        return res.end(`<!doctype html><script>
+          fetch(location.origin + '/api/read').then(() => parent.postMessage('get:ok', '*'), () => parent.postMessage('get:failed', '*'))
+          fetch(location.origin + '/api/write', { method: 'POST', body: 'x' }).then(() => parent.postMessage('post:sent', '*'), (error) => parent.postMessage('post:' + error.message, '*'))
+          fetch(location.origin + '/api/bare-post', { method: 'POST' }).then(() => parent.postMessage('bare:sent', '*'), (error) => parent.postMessage('bare:' + error.message, '*'))
+          fetch(location.origin + '/api/delete', { method: 'DELETE' }).then(() => parent.postMessage('delete:sent', '*'), (error) => parent.postMessage('delete:' + error.message, '*'))
+          let reads = 0
+          fetch(location.origin + '/api/twice', { get method() { return reads++ ? 'POST' : 'GET' } }).then(() => parent.postMessage('twice:ok', '*'), () => parent.postMessage('twice:failed', '*'))
+        </script>`)
+      }
       if (req.method === 'GET' && req.url === '/sw.js') {
         res.setHeader('content-type', 'text/javascript')
         return res.end(`self.addEventListener('install', () => { fetch('/api/from-sw', { method: 'POST', body: 'x' }) })
@@ -171,6 +182,159 @@ describe('the guard keeps a scripted run from writing on a read-only target', { 
     }
   })
 
+  test('a page cannot switch the unload guard off by dispatching a pageshow of its own', async (t) => {
+    for (const leave of ['navigate', 'close']) {
+      const { page } = await open(t)
+      await page.evaluate((origin) => {
+        addEventListener('pagehide', () => {
+          dispatchEvent(new Event('pageshow')) // not a real one: the browser did not send it
+          fetch(`${origin}/api/forged`, { method: 'POST', keepalive: true, body: 'x' }).catch(() => {})
+        })
+      }, server.origin)
+
+      if (leave === 'navigate') await page.goto(`${server.origin}/elsewhere`)
+      else await page.close()
+      await pause(400)
+
+      assert.deepEqual(server.writes(), [], leave)
+    }
+  })
+
+  test('a page cannot get the native fetch by catching a call the guard makes, and use it while it unloads', async (t) => {
+    for (const leave of ['navigate', 'close']) {
+      const { page } = await open(t)
+      await page.evaluate((origin) => {
+        let leaked
+        const realApply = Function.prototype.apply
+        Function.prototype.apply = function (thisArg, args) {
+          leaked = this
+          return Reflect.apply(realApply, this, [thisArg, args])
+        }
+        fetch('/warmup').catch(() => {}) // the guard's fetch calls something of the page's here, and the page keeps what it was given
+        Function.prototype.apply = realApply
+        addEventListener('pagehide', () => {
+          Reflect.apply(leaked, window, [`${origin}/api/leaked`, { method: 'POST', keepalive: true, body: 'x' }])
+        })
+      }, server.origin)
+
+      if (leave === 'navigate') await page.goto(`${server.origin}/elsewhere`)
+      else await page.close()
+      await pause(400)
+
+      assert.deepEqual(server.writes(), [], leave)
+    }
+  })
+
+  test('a frame of the page is as closed as the page: its fetch is refused once the page above it is unloading', async (t) => {
+    for (const leave of ['navigate', 'close']) {
+      const { page } = await open(t)
+      await page.evaluate((origin) => {
+        const frame = document.createElement('iframe') // its pagehide comes after the page's own, which is when this runs
+        document.body.append(frame)
+        addEventListener('pagehide', () => {
+          frame.contentWindow.fetch(`${origin}/api/from-frame`, { method: 'POST', keepalive: true, body: 'x' }).catch(() => {})
+        })
+      }, server.origin)
+
+      if (leave === 'navigate') await page.goto(`${server.origin}/elsewhere`)
+      else await page.close()
+      await pause(400)
+
+      assert.deepEqual(server.writes(), [], leave)
+    }
+  })
+
+  test('a frame that replaces its own window.parent is still closed once the page above it is unloading', async (t) => {
+    for (const leave of ['navigate', 'close']) {
+      const { page } = await open(t)
+      await page.evaluate(async (origin) => {
+        const frame = document.createElement('iframe')
+        frame.srcdoc = '<script>Object.defineProperty(window, "parent", { value: window })</script>' // the frame says it has no page above it
+        document.body.append(frame)
+        await new Promise((resolve) => frame.addEventListener('load', resolve))
+        addEventListener('pagehide', () => {
+          frame.contentWindow.fetch(`${origin}/api/from-frame`, { method: 'POST', keepalive: true, body: 'x' }).catch(() => {})
+        })
+      }, server.origin)
+
+      if (leave === 'navigate') await page.goto(`${server.origin}/elsewhere`)
+      else await page.close()
+      await pause(400)
+
+      assert.deepEqual(server.writes(), [], leave)
+    }
+  })
+
+  test('a page that reopens its own document does not lose the guard: document.open and document.write', async (t) => {
+    for (const how of ['open', 'write']) {
+      for (const leave of ['navigate', 'close']) {
+        const { page } = await open(t)
+        await page.evaluate(
+          ({ origin, how }) => {
+            if (how === 'open') {
+              document.open()
+              document.close()
+            } else {
+              document.write('<p>written</p>') // opens the document again by itself
+              document.close()
+            }
+            addEventListener('pagehide', () => {
+              fetch(`${origin}/api/after-reopen`, { method: 'POST', keepalive: true, body: 'x' }).catch(() => {})
+            })
+          },
+          { origin: server.origin, how },
+        )
+
+        if (leave === 'navigate') await page.goto(`${server.origin}/elsewhere`)
+        else await page.close()
+        await pause(400)
+
+        assert.deepEqual(server.writes(), [], `${how} ${leave}`)
+      }
+    }
+  })
+
+  test('a frame whose page above is of another origin cannot be asked, so it is allowed plain reads and nothing else', async (t) => {
+    const { page } = await open(t)
+
+    await page.evaluate((frameOrigin) => {
+      window.__messages = []
+      addEventListener('message', (event) => window.__messages.push(event.data))
+      const frame = document.createElement('iframe')
+      frame.src = `${frameOrigin}/frame`
+      document.body.append(frame)
+    }, other.origin)
+    await page.waitForFunction(() => window.__messages.length >= 5, null, { timeout: 5000 })
+    const messages = await page.evaluate(() => window.__messages)
+
+    assert.ok(messages.includes('get:ok'), messages.join(' | ')) // a read goes through
+    assert.ok(messages.some((message) => message.startsWith('post:blocked by fe-kit')), messages.join(' | ')) // a write is refused by the guard itself
+    assert.ok(messages.some((message) => message.startsWith('bare:blocked by fe-kit')), messages.join(' | ')) // a POST with no body is a write too
+    assert.ok(messages.some((message) => message.startsWith('delete:blocked by fe-kit')), messages.join(' | '))
+    assert.ok(messages.includes('twice:ok'), messages.join(' | ')) // what is looked at is what is sent: a method that changes its answer is read once
+    assert.deepEqual(other.writes(), [])
+  })
+
+  test('a read sent while the page unloads is refused too, since nothing sent then is seen by the route', async (t) => {
+    for (const leave of ['navigate', 'close']) {
+      const { page } = await open(t)
+      await page.evaluate((origin) => {
+        addEventListener('pagehide', () => {
+          // The answer is kept in local storage, which outlives the page, so that the next page can say what the fetch was told.
+          fetch(`${origin}/api/read-in-unload`).then(() => localStorage.setItem('told', 'sent'), (error) => localStorage.setItem('told', error.message))
+        })
+      }, server.origin)
+
+      if (leave === 'navigate') {
+        await page.goto(`${server.origin}/elsewhere`)
+        assert.match(await page.evaluate(() => localStorage.getItem('told')), /blocked by fe-kit: the page is unloading/)
+      } else await page.close()
+      await pause(400)
+
+      assert.equal(server.requests.some((request) => request.url === '/api/read-in-unload'), false, leave)
+    }
+  })
+
   test('sendBeacon and keepalive fetches are refused while the page runs', async (t) => {
     const { page } = await open(t)
 
@@ -230,12 +394,14 @@ describe('the guard keeps a scripted run from writing on a read-only target', { 
         return { allow: true, via: 'read' }
       },
     }
-    const { page } = await open(t, { policy: broken })
+    const { page, events } = await open(t, { policy: broken })
 
     const outcome = await page.evaluate((origin) => fetch(`${origin}/api/orders`, { method: 'POST', body: 'x' }).then(() => 'sent', () => 'refused'), server.origin)
 
     assert.equal(outcome, 'refused')
     assert.deepEqual(server.writes(), [])
+    assert.deepEqual(events.filter((event) => event.kind === 'guard-error').map((event) => event.reason), ['an internal error stopped this request']) // told, not swallowed
+    assert.ok(!JSON.stringify(events).includes('policy bug')) // and without what the error said
   })
 
   test('a target that is not read-only has no guard: writes go through and nothing is recorded', async (t) => {

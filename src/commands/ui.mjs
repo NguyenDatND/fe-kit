@@ -66,6 +66,7 @@ export async function run({ args, flags, cwd, env, kitRoot, deps = {} }) {
     pagePath: `${address.pathname}${address.search}`,
     outDir: folder,
     deps,
+    allowRequest: flags['allow-request'],
     ...(deps.settleMs === undefined ? {} : { settleMs: deps.settleMs }),
   })
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { chmod, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -122,6 +122,18 @@ describe('fe-kit ui from the command line', { skip: skipReason }, () => {
 
     assert.equal(exitCode, 0)
     assert.deepEqual(app.writes(), ['POST /api/orders'])
+  })
+
+  test('a saved login in a folder that others can enter is not used, and the run does not start', async (t) => {
+    const { dir, env, state } = await setup(t)
+    await saveSession(sessionPath(state, { profile: 'shop', target: 'staging', role: 'admin' }), await loginState(browser, app, 'admin'))
+    await chmod(join(state, 'auth', 'shop'), 0o755)
+    app.reset()
+
+    await assert.rejects(call(dir, env, { target: 'staging', role: 'admin', path: '/' }), (error) => error instanceof UsageError && /chmod 700/.test(error.message))
+
+    assert.deepEqual(app.requests, [])
+    await chmod(join(state, 'auth', 'shop'), 0o700)
   })
 
   test('no saved login is exit 3 and says which command to run', async (t) => {

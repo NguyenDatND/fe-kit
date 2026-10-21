@@ -33,14 +33,22 @@ export async function startApp() {
       if (path === '/api/me-redirect') return send(res, 302, '', { location: '/login' })
       if (path === '/api/forbidden') return send(res, 403, '{}', { 'content-type': 'application/json' })
       if (path === '/api/orders' && req.method === 'POST') return send(res, 201, '{"id":1}', { 'content-type': 'application/json' })
+      if (path.startsWith('/public/')) return send(res, 200, '<h1>Public page</h1>')
       if (path === '/plain') return send(res, 200, '<h1>Plain page</h1>')
       if (path === '/soft') return send(res, 200, '<h1>Session ended</h1><form id="login"><input name="role"><button>Sign in</button></form>') // a login page shown at the old URL
       if (path === '/forbidden-probe') return send(res, 200, '<h1>Dashboard</h1><span data-user>x</span>')
       if (path === '/broken') {
         return send(res, 200, '<h1>Broken</h1><script>console.log("just info"); console.error("Something broke: token=ABC"); console.error("see https://user:FAKE_PW@example.test/x"); fetch("/api/missing"); fetch("/api/bad"); setTimeout(() => { throw new Error("late failure") }, 10)</script>')
       }
+      if (path.startsWith('/api/gone/')) return send(res, 404, '{}', { 'content-type': 'application/json' })
       if (path === '/api/missing') return send(res, 404, '{}', { 'content-type': 'application/json' })
       if (path === '/api/bad') return send(res, 400, '{}', { 'content-type': 'application/json' })
+      if (path === '/leaky') return send(res, 200, '<h1>Leaky</h1><script>console.error("the cookie is " + document.cookie); console.error("stored " + localStorage.getItem("token")); throw new Error("failed for " + localStorage.getItem("token"))</script>')
+      if (path === '/echo') return send(res, 200, '<h1>Echo</h1><input id="box"><script>document.getElementById("box").addEventListener("input", (event) => console.error("typed " + event.target.value))</script>')
+      if (path === '/path-secret') return send(res, 200, '<h1>Path secret</h1><script>fetch("/api/gone/FAKE_PATH_SECRET_VALUE"); fetch("/api/FAKE_PATH_SECRET_VALUE/save", { method: "POST", body: "x" }).catch(() => {})</script>')
+      if (path === '/post-hangup') return send(res, 200, '<h1>Post hangup</h1><script>fetch("/hangup", { method: "POST", body: "x" }).catch(() => {})</script>')
+      if (path === '/post-redirect') return send(res, 200, '<h1>Post redirect</h1><script>fetch("/redirect-post", { method: "POST", body: "x" }).catch(() => {})</script>')
+      if (path === '/redirect-post') return send(res, 307, '', { location: '/api/orders' })
       if (path === '/dropped') return send(res, 200, '<h1>Dropped</h1><script>fetch("/hangup").catch(() => {})</script>')
       if (path === '/hangup') return req.socket.destroy()
       if (path === '/tall') return send(res, 200, '<h1>Tall</h1><div style="height:3000px">long page</div>')

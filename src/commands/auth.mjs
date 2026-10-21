@@ -2,6 +2,7 @@ import { createInterface } from 'node:readline/promises'
 import { saveSession, sessionStatus } from '../lib/auth-store.mjs'
 import { loadPlaywright } from '../lib/browser.mjs'
 import { UsageError } from '../lib/errors.mjs'
+import { plainUrl } from '../lib/plain-url.mjs'
 import { plural } from '../lib/format.mjs'
 import { resolveProject } from '../lib/project.mjs'
 import { resolvePagePath, resolveUiTarget } from '../lib/ui-target.mjs'
@@ -57,8 +58,14 @@ async function login(resolved, flags, deps) {
   const browser = await deps.launchBrowser({ headless: false })
   try {
     const context = await browser.newContext()
-    await (await context.newPage()).goto(address.href)
-    deps.say(`Opened ${address.href}. Log in as ${resolved.role} in the window, then press Enter here.`)
+    try {
+      await (await context.newPage()).goto(address.href)
+    } catch (error) {
+      // The address the browser was given can carry a token in its query string, and the message of the error quotes it.
+      const reason = String(error?.message ?? error).split('\n')[0].replace(/https?:\/\/\S+/g, (url) => plainUrl(url))
+      throw new UsageError(`could not open ${plainUrl(address.href)}: ${reason.slice(0, 200)}`)
+    }
+    deps.say(`Opened ${address.origin}${address.pathname}. Log in as ${resolved.role} in the window, then press Enter here.`) // the query string stays out of the terminal: it can hold a token
     await deps.waitForEnter()
     const state = await context.storageState({ indexedDB: true })
     // Nothing in the browser means the login did not happen; a good saved login is not replaced by that.

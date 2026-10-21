@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { mkdir, open, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { UsageError } from './errors.mjs'
@@ -26,14 +27,27 @@ export function sessionPath(root, { profile, target, role }) {
   return join(root, 'auth', profile, `${target}.${role}.json`)
 }
 
-/** Makes `folder` (mode 700) when it is not there; a link or a file in its place is refused. */
-async function ensureFolder(folder) {
+/** What is wrong with a folder that holds saved logins, in words; null when it is fine, or when it is not there yet. */
+async function folderProblem(folder) {
   const found = await lstatOrNull(folder)
-  if (found === null) {
-    await mkdir(folder, { mode: 0o700 }) // the umask can only take bits away from this, never add any
-  } else if (!found.isDirectory()) {
-    throw new UsageError(`${folder} is a link or a file, not a folder: the saved logins are not written through it`)
-  }
+  if (found === null) return null
+  if (!found.isDirectory()) return `the folder ${folder} is a link or not a folder: the saved logins are not read or written through it`
+  if (POSIX && found.uid !== process.getuid()) return `the folder ${folder} belongs to another user`
+  if (POSIX && (found.mode & 0o077) !== 0) return `the folder ${folder} can be entered by other users (mode ${(found.mode & 0o777).toString(8)}); run chmod 700 on it`
+  return null
+}
+
+/** The first problem with the two folders above a saved login (`auth` and the profile's); null when both are fine or not there. */
+async function foldersProblem(file) {
+  const profileFolder = dirname(file)
+  return (await folderProblem(dirname(profileFolder))) ?? (await folderProblem(profileFolder))
+}
+
+/** Makes `folder` (mode 700) when it is not there; one that is there must already be a private folder of ours. */
+async function ensureFolder(folder) {
+  const problem = await folderProblem(folder)
+  if (problem !== null) throw new UsageError(problem)
+  if ((await lstatOrNull(folder)) === null) await mkdir(folder, { mode: 0o700 }) // the umask can only take bits away from this, never add any
 }
 
 export async function saveSession(file, state) {
@@ -55,40 +69,49 @@ export async function saveSession(file, state) {
 
 const isSession = (value) => value !== null && typeof value === 'object' && Array.isArray(value.cookies) && Array.isArray(value.origins)
 
-async function parseSession(file) {
-  let value
+/** The state in a text, or null when it is not one. The parse error is not passed on: it can quote the file. */
+function parseSession(text) {
   try {
-    value = JSON.parse(await readFile(file, 'utf8'))
+    const value = JSON.parse(text)
+    return isSession(value) ? value : null
   } catch {
-    return null // the parse error is not passed on: it can quote the file
+    return null
   }
-  return isSession(value) ? value : null
 }
 
-/** The saved state, or null when there is none. A link, or a file that is not a saved login, is a usage error. */
+const fileProblem = (found) => (POSIX && (found.mode & 0o077) !== 0 ? `the file can be read by other users (mode ${(found.mode & 0o777).toString(8)}); run chmod 600 on it` : null)
+
+/** The saved state, or null when there is none. A link, folders or a file others can get at, or a file that is not a saved login, is a usage error. */
 export async function readSession(file) {
+  const folders = await foldersProblem(file)
+  if (folders !== null) throw new UsageError(folders)
   const found = await lstatOrNull(file)
   if (found === null) return null
   if (!found.isFile()) throw new UsageError(`${file} is a link or not a regular file: it is not read`)
-  const state = await parseSession(file)
+  const unsafe = fileProblem(found)
+  if (unsafe !== null) throw new UsageError(`${file}: ${unsafe}`)
+  let state = null
+  // Opened without following a link: a file swapped for one after the check above is not read.
+  const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW)
+  try {
+    state = parseSession(await handle.readFile('utf8'))
+  } finally {
+    await handle.close()
+  }
   if (state === null) throw new UsageError(`${file} is not a saved login (run \`fe-kit auth login\` again)`)
   return state
 }
 
 /** What is saved, without any value of it: `{ state, ... }` with state missing, present, unsafe or invalid. */
 export async function sessionStatus(file) {
+  const folders = await foldersProblem(file)
+  if (folders !== null) return { state: 'unsafe', problem: folders }
   const found = await lstatOrNull(file)
   if (found === null) return { state: 'missing' }
   if (!found.isFile()) return { state: 'unsafe', problem: 'it is a link or not a regular file' }
-  if (POSIX) {
-    const folder = await lstatOrNull(dirname(file))
-    for (const [label, entry] of [['file', found], ['folder', folder]]) {
-      if (entry !== null && (entry.mode & 0o077) !== 0) {
-        return { state: 'unsafe', problem: `the ${label} can be read by other users (mode ${(entry.mode & 0o777).toString(8)}); run chmod ${label === 'file' ? '600' : '700'} on it` }
-      }
-    }
-  }
-  const state = await parseSession(file)
+  const unsafe = fileProblem(found)
+  if (unsafe !== null) return { state: 'unsafe', problem: unsafe }
+  const state = await readSession(file).catch(() => null)
   if (state === null) return { state: 'invalid' }
   const expiries = state.cookies.map((cookie) => cookie?.expires).filter((expires) => typeof expires === 'number' && expires > 0)
   return {

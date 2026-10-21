@@ -3,15 +3,30 @@ import { join } from 'node:path'
 import { plural } from './format.mjs'
 
 const SHOWN = 10
+const MAX_LINE = 160
 
 const subject = (data) => `${data.target}${data.role === null ? '' : ` as ${data.role}`}`
 const loginCommand = (data) => `fe-kit auth login --target ${data.target} --role ${data.role}`
 
+/** The same line told again becomes one line with a count: a page that fails the same way six times is one finding. */
+function grouped(lines) {
+  const counts = new Map()
+  for (const line of lines) counts.set(line, (counts.get(line) ?? 0) + 1)
+  return [...counts].map(([line, count]) => (count === 1 ? line : `${line} (x${count})`))
+}
+
 /** The lines of a list, at most SHOWN of them, and a last line saying how many were left out. */
 function listed(lines, rest) {
-  const shown = lines.slice(0, SHOWN).map((line) => `  - ${line}`)
-  if (lines.length > SHOWN) shown.push(`  - and ${lines.length - SHOWN} more in ${rest}`)
+  const different = grouped(lines)
+  const shown = different.slice(0, SHOWN).map((line) => `  - ${line}`)
+  if (different.length > SHOWN) shown.push(`  - and ${different.length - SHOWN} more in ${rest}`)
   return shown
+}
+
+/** A console message as one short line: its first line, cut. The whole message is in the report. */
+const firstLineOf = (text) => {
+  const first = text.split('\n')[0]
+  return first.length > MAX_LINE ? `${first.slice(0, MAX_LINE)}…` : first
 }
 
 function loginLines(data) {
@@ -21,6 +36,12 @@ function loginLines(data) {
   if (state === 'authenticated') return [`Login: authenticated`]
   if (state === 'expired') return [`Login: expired${seen}`, `  Log in again, yourself: ${loginCommand(data)}`]
   return ['Login: unknown, so it was not verified: nothing the target is configured to show was seen on the page']
+}
+
+function resultLine(data) {
+  if (data.exitCode === 3) return 'Result: login lost'
+  const problems = data.problems ?? []
+  return problems.length > 0 ? `Result: failed (${problems.join('; ')})` : 'Result: ok'
 }
 
 /** What `fe-kit ui` prints. `directory` is where the pictures and the report were written, as it should be shown. */
@@ -41,7 +62,7 @@ export function formatUiText(data, { directory }) {
 
   const dropped = data.droppedFindings > 0 ? ` (and ${data.droppedFindings} more not kept)` : ''
   lines.push(data.consoleErrors.length === 0 ? 'Console errors: none' : `Console errors: ${data.consoleErrors.length}${dropped}`)
-  lines.push(...listed(data.consoleErrors.map((entry) => `${entry.type}: ${entry.text}`), 'report.md'))
+  lines.push(...listed(data.consoleErrors.map((entry) => `${entry.type}: ${firstLineOf(entry.text)}`), 'report.md'))
   lines.push(data.failedResponses.length === 0 ? 'Failed responses: none' : `Failed responses: ${data.failedResponses.length}`)
   lines.push(...listed(data.failedResponses.map((entry) => `${entry.status} ${entry.method} ${entry.url}`), 'report.md'))
   const refused = data.guard.filter((event) => event.kind !== 'allowed-write')
@@ -54,7 +75,7 @@ export function formatUiText(data, { directory }) {
     lines.push(`Writes let through: ${allowed.length}`)
     lines.push(...listed(allowed.map((event) => `${event.method} ${event.url} (${event.via})`), 'report.md'))
   }
-  lines.push(`Report: ${directory}/report.md`)
+  lines.push(resultLine(data), `Report: ${directory}/report.md`)
   return `${lines.join('\n')}\n`
 }
 
@@ -62,7 +83,7 @@ const cell = (text) => String(text ?? '').replace(/\|/g, '\\|').replace(/\n/g, '
 
 /** The report that is kept next to the pictures. */
 export function formatUiMarkdown(data) {
-  const lines = [`# UI check: ${subject(data)}`, '', '## Result', '', `- target: ${data.target} (${data.readOnly ? 'read-only' : 'writable'}), ${data.url}`, `- exit code: ${data.exitCode}`]
+  const lines = [`# UI check: ${subject(data)}`, '', '## Result', '', `- target: ${data.target} (${data.readOnly ? 'read-only' : 'writable'}), ${data.url}`, `- exit code: ${data.exitCode}`, `- ${resultLine(data).toLowerCase()}`]
   if (data.timedOut) lines.push('- the run was stopped: it took too long')
   if (data.navigationError !== null) lines.push(`- could not open the page: ${data.navigationError}`)
   lines.push('', '## Login', '', `- state: ${data.session.state}`, ...data.session.evidence.map((line) => `- ${line}`))
@@ -74,13 +95,13 @@ export function formatUiMarkdown(data) {
     lines.push('| # | action | target | status | note |', '|---|---|---|---|---|')
     for (const step of data.steps) lines.push(`| ${step.index + 1} | ${cell(step.action)} | ${cell(step.selector ?? step.path ?? step.name ?? step.key)} | ${step.status} | ${cell(step.error)} |`)
   }
-  lines.push('', '## Console errors', '', ...(data.consoleErrors.length === 0 ? ['None.'] : data.consoleErrors.map((entry) => `- ${entry.type}: ${cell(entry.text)}`)))
+  lines.push('', '## Console errors', '', ...(data.consoleErrors.length === 0 ? ['None.'] : grouped(data.consoleErrors.map((entry) => `${entry.type}: ${cell(entry.text)}`)).map((line) => `- ${line}`)))
   if (data.droppedFindings > 0) lines.push(`- and ${data.droppedFindings} more were not kept`)
-  lines.push('', '## Failed responses', '', ...(data.failedResponses.length === 0 ? ['None.'] : data.failedResponses.map((entry) => `- ${entry.status} ${entry.method} ${entry.url}`)))
+  lines.push('', '## Failed responses', '', ...(data.failedResponses.length === 0 ? ['None.'] : grouped(data.failedResponses.map((entry) => `${entry.status} ${entry.method} ${entry.url}`)).map((line) => `- ${line}`)))
   if (data.failedRequests.length > 0) lines.push('', '## Requests that failed', '', ...data.failedRequests.map((entry) => `- ${entry.method} ${entry.url}: ${entry.reason}`))
   lines.push('', '## Refused by the guard', '')
   const refused = data.guard.filter((event) => event.kind !== 'allowed-write')
-  lines.push(...(refused.length === 0 ? ['Nothing was refused.'] : refused.map((event) => `- ${event.kind}: ${event.method === undefined ? '' : `${event.method} `}${event.url}: ${event.reason}`)))
+  lines.push(...(refused.length === 0 ? ['Nothing was refused.'] : grouped(refused.map((event) => `${event.kind}: ${event.method === undefined ? '' : `${event.method} `}${event.url}: ${event.reason}`)).map((line) => `- ${line}`)))
   const allowed = data.guard.filter((event) => event.kind === 'allowed-write')
   if (allowed.length > 0) lines.push('', `Writes let through (${plural(allowed.length, 'request')}):`, ...allowed.map((event) => `- ${event.method} ${event.url} (${event.via})`))
   return `${lines.join('\n')}\n`

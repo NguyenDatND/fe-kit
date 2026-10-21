@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
 import { loadPlaywright } from '../src/lib/browser.mjs'
 import { UsageError } from '../src/lib/errors.mjs'
-import { runUi } from '../src/lib/ui-runner.mjs'
+import { exitCodeOf, runUi } from '../src/lib/ui-runner.mjs'
 import { parseViewports } from '../src/lib/ui-viewports.mjs'
 import { loginState, startApp } from './ui-fixture.mjs'
 import { tempDir } from './helpers.mjs'
@@ -197,6 +197,7 @@ describe('runUi looks at the target in a real browser and reports what it saw', 
     assert.deepEqual(data.guard.filter((event) => event.kind === 'blocked').map((event) => `${event.method} ${event.url}`), [`POST ${app.origin}/api/orders`])
     assert.equal(data.readOnly, true)
     assert.deepEqual(data.failedRequests, []) // what the guard refused is told by the guard, not as a failed request
+    assert.equal(data.consoleErrors.some((entry) => entry.text.includes('ERR_BLOCKED_BY_CLIENT')), false) // nor as a console error: the browser's own note of the refusal
   })
 
   test('a step that fails stops the run: it is reported, the rest are skipped, and the exit code is 1', async (t) => {
@@ -212,6 +213,7 @@ describe('runUi looks at the target in a real browser and reports what it saw', 
     assert.equal(exitCode, 1)
     assert.deepEqual(data.steps.map((step) => step.status), ['ok', 'failed', 'skipped'])
     assert.match(data.steps[1].error, /timeout after 600 ms/)
+    assert.deepEqual(data.problems, ['step 2 failed'])
     assert.ok(!data.steps[1].error.includes('Plain page'))
   })
 
@@ -287,12 +289,161 @@ describe('runUi looks at the target in a real browser and reports what it saw', 
 
     assert.equal(exitCode, 1)
     assert.equal(data.timedOut, true)
+    assert.ok(data.problems.includes('the run took too long'))
   })
 
   test('a request that fails on its own (the server hangs up) is reported as a failed request', async (t) => {
     const { data } = await run(t, { pagePath: '/dropped' })
 
     assert.deepEqual(data.failedRequests.map((entry) => `${entry.method} ${entry.url}`), [`GET ${app.origin}/hangup`])
+  })
+
+  test('a login lost by a step is still found when the next step fails: exit 3, with both told', async (t) => {
+    const storageState = await loginState(browser, app, 'admin')
+    const session = { loginPath: '/login', loginMarker: undefined, loggedInMarker: '[data-user]', probe: { path: '/api/me', expired: [401], loggedIn: [200] } }
+
+    const { data, exitCode } = await run(t, {
+      pagePath: '/orders',
+      resolved: { role: 'admin', session },
+      storageState,
+      steps: [
+        { action: 'click', selector: '#expire' },
+        { action: 'expectText', text: 'nothing like this', timeoutMs: 300 },
+      ],
+    })
+
+    assert.equal(exitCode, 3)
+    assert.equal(data.session.state, 'expired')
+    assert.deepEqual(data.steps.map((step) => step.status), ['ok', 'failed'])
+  })
+
+  test('a write that was let through and then failed on the way is a failed run, even when every step passed', async (t) => {
+    const resolvedGuard = { readOnly: true, safeRequests: [{ method: 'POST', path: '/hangup', body: 'any' }] }
+
+    const { data, exitCode } = await run(t, { pagePath: '/post-hangup', resolved: resolvedGuard })
+
+    assert.equal(exitCode, 1)
+    assert.ok(data.guard.some((event) => event.kind === 'transport-refused'))
+    assert.match(data.problems.join('; '), /could not pass 1 request on/)
+  })
+
+  test('a redirect after a write that was let through is a failed run too', async (t) => {
+    const resolvedGuard = { readOnly: true, safeRequests: [{ method: 'POST', path: '/redirect-post', body: 'any' }] }
+
+    const { data, exitCode } = await run(t, { pagePath: '/post-redirect', resolved: resolvedGuard })
+
+    assert.equal(exitCode, 1)
+    assert.ok(data.guard.some((event) => event.kind === 'redirect-refused'))
+  })
+
+  test('an ordinary refusal of a write is not a failure, but the guard failing inside is', () => {
+    const quiet = { session: { state: 'not-required' }, steps: [], timedOut: false, navigationError: null }
+
+    assert.equal(exitCodeOf({ ...quiet, guard: [{ kind: 'blocked' }, { kind: 'websocket-blocked' }, { kind: 'allowed-write' }] }), 0)
+    for (const kind of ['transport-refused', 'redirect-refused', 'guard-error']) assert.equal(exitCodeOf({ ...quiet, guard: [{ kind }] }), 1, kind)
+  })
+
+  test('what the page prints about a secret it holds, and what a step typed, is not in the result', async (t) => {
+    const storageState = {
+      cookies: [{ name: 'client', value: 'FAKE_CLIENT_COOKIE_VALUE', domain: '127.0.0.1', path: '/', expires: -1, httpOnly: false, secure: false, sameSite: 'Lax' }],
+      origins: [{ origin: app.origin, localStorage: [{ name: 'token', value: 'FAKE_LOCAL_TOKEN_VALUE' }] }],
+    }
+
+    const leaky = await run(t, { pagePath: '/leaky', storageState })
+    const echo = await run(t, { pagePath: '/echo', steps: [{ action: 'fill', selector: '#box', value: 'FAKE_TYPED_VALUE' }] })
+
+    const everything = JSON.stringify([leaky.data, echo.data])
+    for (const secret of ['FAKE_CLIENT_COOKIE_VALUE', 'FAKE_LOCAL_TOKEN_VALUE', 'FAKE_TYPED_VALUE']) assert.ok(!everything.includes(secret), secret)
+    assert.ok(leaky.data.consoleErrors.some((entry) => entry.text === 'the cookie is client=[REDACTED]'))
+    assert.ok(leaky.data.consoleErrors.every((entry) => !entry.text.includes('FAKE_')))
+    assert.ok(echo.data.consoleErrors.some((entry) => entry.text === 'typed [REDACTED]'))
+  })
+
+  test('an error message that quotes a known secret (here in the path of an address that could not be opened) does not keep it', async (t) => {
+    const closed = await startApp()
+    const dead = closed.origin
+    await closed.close()
+    const storageState = { cookies: [{ name: 'c', value: 'FAKE_SECRET_IN_PATH', domain: '127.0.0.1', path: '/', expires: -1, httpOnly: false, secure: false, sameSite: 'Lax' }], origins: [] }
+
+    const { data } = await run(t, { resolved: { url: dead, origin: dead }, storageState, pagePath: '/FAKE_SECRET_IN_PATH' })
+
+    assert.match(data.navigationError, /ERR_CONNECTION_REFUSED/)
+    assert.ok(!JSON.stringify(data).includes('FAKE_SECRET_IN_PATH'))
+  })
+
+  test('what a step typed is scrubbed from what the page says, but the words of the report itself are not: a step may type "desktop" or "failed"', async (t) => {
+    const { data, exitCode } = await run(t, {
+      pagePath: '/echo',
+      steps: [
+        { action: 'fill', selector: '#box', value: 'desktop' },
+        { action: 'fill', selector: '#box', value: 'failed' },
+        { action: 'fill', selector: '#box', value: 'authenticated' },
+        { action: 'fill', selector: '#box', value: 'not-required' },
+      ],
+    })
+
+    assert.equal(exitCode, 0)
+    assert.deepEqual(data.steps.map((step) => step.status), ['ok', 'ok', 'ok', 'ok'])
+    assert.equal(data.viewports[0].screenshot, 'page.desktop.png')
+    assert.equal(data.viewports[0].name, 'desktop')
+    assert.equal(data.session.state, 'not-required')
+    assert.ok(data.consoleErrors.every((entry) => entry.text === 'typed [REDACTED]'))
+  })
+
+  test('a secret in the path of an address is scrubbed from every finding made of addresses', async (t) => {
+    const storageState = { cookies: [{ name: 'c', value: 'FAKE_PATH_SECRET_VALUE', domain: '127.0.0.1', path: '/', expires: -1, httpOnly: false, secure: false, sameSite: 'Lax' }], origins: [] }
+
+    const guarded = await run(t, { pagePath: '/path-secret', storageState, resolved: { readOnly: true } })
+    const final = await run(t, { pagePath: '/public/FAKE_PATH_SECRET_VALUE', storageState })
+
+    assert.ok(guarded.data.failedResponses.some((entry) => entry.url === `${app.origin}/api/gone/[REDACTED]`))
+    assert.ok(guarded.data.guard.some((event) => event.kind === 'blocked' && event.url === `${app.origin}/api/[REDACTED]/save`))
+    assert.equal(final.data.viewports[0].finalUrl, `${app.origin}/public/[REDACTED]`)
+    assert.ok(!JSON.stringify([guarded.data, final.data]).includes('FAKE_PATH_SECRET_VALUE'))
+  })
+
+  test('a secret in a selector, in the path of a step, in the address of the target, or in the path of the probe is not in the result', async (t) => {
+    const storageState = { cookies: [{ name: 'c', value: 'FAKE_SECRET_TYPED', domain: '127.0.0.1', path: '/', expires: -1, httpOnly: false, secure: false, sameSite: 'Lax' }], origins: [] }
+    const { data } = await run(t, {
+      pagePath: '/echo',
+      storageState,
+      resolved: { url: `${app.origin}/public/FAKE_SECRET_TYPED` },
+      steps: [
+        { action: 'goto', path: '/public/FAKE_SECRET_TYPED?x=1' },
+        { action: 'expectVisible', selector: '[data-x="FAKE_SECRET_TYPED"]', timeoutMs: 200 },
+      ],
+    })
+
+    assert.deepEqual(data.steps.map((step) => step.status), ['ok', 'failed'])
+    assert.equal(data.steps[0].path, '/public/[REDACTED]')
+    assert.equal(data.steps[1].selector, '[data-x="[REDACTED]"]')
+    assert.ok(!JSON.stringify(data).includes('FAKE_SECRET_TYPED'))
+  })
+
+  test('a secret in the path of the probe is scrubbed from the evidence, as it is from everything else', async (t) => {
+    const storageState = { cookies: [{ name: 'c', value: 'FAKE_SECRET_TYPED', domain: '127.0.0.1', path: '/', expires: -1, httpOnly: false, secure: false, sameSite: 'Lax' }], origins: [] }
+    const session = { loginPath: '/login', loginMarker: undefined, loggedInMarker: undefined, probe: { path: '/api/gone/FAKE_SECRET_TYPED', expired: [401], loggedIn: [404] } }
+
+    const { data } = await run(t, { pagePath: '/plain', resolved: { role: 'admin', session }, storageState })
+
+    assert.deepEqual(data.session.evidence, ['first page: the probe /api/gone/[REDACTED] answered 404'])
+  })
+
+  test('the probe is told by its path only, whatever its address carries', async (t) => {
+    const storageState = await loginState(browser, app, 'admin')
+    const session = { loginPath: '/login', loginMarker: undefined, loggedInMarker: undefined, probe: { path: '/api/me?token=FAKE_QUERY_SECRET', expired: [401], loggedIn: [200] } }
+
+    const { data } = await run(t, { pagePath: '/plain', resolved: { role: 'admin', session }, storageState })
+
+    assert.equal(data.session.state, 'authenticated')
+    assert.deepEqual(data.session.evidence, ['first page: the probe /api/me answered 200'])
+  })
+
+  test('a goto step is reported with its path only, never the query string or the fragment', async (t) => {
+    const { data } = await run(t, { steps: [{ action: 'goto', path: '/plain?token=FAKE_QUERY_SECRET#FAKE_FRAGMENT_SECRET' }] })
+
+    assert.equal(data.steps[0].path, '/plain')
+    assert.ok(!JSON.stringify(data).includes('FAKE_'))
   })
 
   test('a probe alone is enough to tell the login is alive', async (t) => {

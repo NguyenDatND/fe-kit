@@ -32,6 +32,7 @@ const base = {
   ],
   navigationError: null,
   timedOut: false,
+  problems: ['step 3 failed'],
   exitCode: 1,
 }
 
@@ -48,6 +49,14 @@ test('the text says what was seen, where the pictures are, and what the guard re
   assert.match(text, /Refused by the guard: 2/)
   assert.match(text, /POST https:\/\/staging\.example\.com\/api\/orders: the target is read-only/)
   assert.match(text, /Report: \.fe-kit\/ui\/run-1\/report\.md/)
+})
+
+test('the result line says why a run is not clean, or that it is', () => {
+  assert.match(formatUiText(base, { directory: 'd' }), /^Result: failed \(step 3 failed\)$/m)
+  assert.match(formatUiText({ ...base, problems: ['step 1 failed', 'the run took too long'] }, { directory: 'd' }), /^Result: failed \(step 1 failed; the run took too long\)$/m)
+  assert.match(formatUiText({ ...base, problems: [], exitCode: 0 }, { directory: 'd' }), /^Result: ok$/m)
+  assert.match(formatUiText({ ...base, exitCode: 3 }, { directory: 'd' }), /^Result: login lost$/m)
+  assert.match(formatUiMarkdown(base), /- result: failed \(step 3 failed\)/)
 })
 
 test('a lost login says how to log in again, with the target and the role', () => {
@@ -109,6 +118,35 @@ test('a pipe in a table cell does not break the table', () => {
   const markdown = formatUiMarkdown({ ...base, steps: [{ index: 0, action: 'click', selector: 'a|b', status: 'failed', error: 'x | y' }] })
 
   assert.match(markdown, /\| 1 \| click \| a\\\|b \| failed \| x \\\| y \|/)
+})
+
+test('the same line told again and again is told once with a count, and a console message shows its first line only', () => {
+  const stack = 'failed to connect to websocket.\nyour current setup:\n  (browser) localhost <--[WebSocket (failing)]--> localhost'
+  const noisy = {
+    ...base,
+    consoleErrors: [...Array.from({ length: 4 }, () => ({ type: 'console', text: stack })), { type: 'console', text: 'another message' }],
+    failedResponses: Array.from({ length: 3 }, () => ({ status: 401, method: 'GET', url: 'https://staging.example.com/api/me' })),
+    guard: Array.from({ length: 5 }, () => ({ kind: 'websocket-blocked', url: 'wss://staging.example.com/', reason: 'a WebSocket can carry writes the guard cannot read' })),
+  }
+  const text = formatUiText(noisy, { directory: 'd' })
+
+  assert.match(text, /^Console errors: 5$/m)
+  assert.match(text, /- console: failed to connect to websocket\. \(x4\)$/m)
+  assert.doesNotMatch(text, /your current setup/)
+  assert.match(text, /- console: another message$/m)
+  assert.match(text, /- 401 GET https:\/\/staging\.example\.com\/api\/me \(x3\)$/m)
+  assert.match(text, /^Refused by the guard: 5$/m)
+  assert.match(text, /- wss:\/\/staging\.example\.com\/: a WebSocket can carry writes the guard cannot read \(x5\)$/m)
+  assert.equal(text.match(/websocket-blocked|a WebSocket can carry/g).length, 1)
+})
+
+test('a first line that is long is cut, and the markdown keeps the whole message on one line', () => {
+  const long = { ...base, consoleErrors: [{ type: 'console', text: `${'x'.repeat(300)}\nsecond line` }] }
+
+  assert.match(formatUiText(long, { directory: 'd' }), /- console: x{160}…$/m)
+  const markdown = formatUiMarkdown(long)
+  assert.ok(markdown.includes('second line'))
+  assert.ok(!markdown.includes('x\nsecond'))
 })
 
 test('the markdown report holds every section, and the failed step is easy to find', () => {

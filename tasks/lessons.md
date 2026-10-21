@@ -74,3 +74,16 @@ Ghi sau mỗi lần bị sửa (người dùng hoặc reviewer): mẫu lỗi và
 49. Máy trạng thái cho cú pháp lồng (nháy trong `$( )` trong nháy) không đáng vá từng ca: khi không có parser, thấy dấu hiệu lồng thì từ chối thừa; kiểm bằng fuzz có shell thật (agent con làm được 12 000 mẫu mỗi hạt).
 50. Lệnh chỉ đọc (`scan`) và lệnh tổng (`verify`) phải cùng quy tắc "chưa kiểm gì thì không xanh"; sửa một nơi mà quên nơi kia là lỗi lặp lại (điểm 3 của agent con).
 51. `--dry-run` phải chạy cùng các kiểm tra "ghi được không" như chạy thật; nếu không, nó hứa điều chạy thật sẽ từ chối.
+
+## 2026-10-21 — Phase 3 (xem UI thật): review kế hoạch 2 lượt, review code 3 lượt của Codex (chi tiết `tasks/phase-3.md`)
+
+52. **Đo trên trình duyệt thật trước khi tin tài liệu hay nhớ.** Plan nói "chặn bằng `context.route`"; thí nghiệm cho thấy mọi `fetch` và `sendBeacon` phát ra trong `pagehide` không đi qua `route`. Cả lớp vá lúc dỡ trang đến từ một script 40 dòng chạy thử, không từ suy luận. Viết thí nghiệm ra file, chạy, rồi mới thiết kế.
+53. **Trạng thái của bộ chặn nằm trong script thì phải tính đến mọi "realm".** Iframe có cờ `unloading` riêng và bị dỡ sau trang cha; `window.parent` là `[Replaceable]` nên phải chụp trước script của trang; `document.open()` xoá listener của window nên phải gắn lại sau `open`/`write`; một iframe khác origin không hỏi được thì chỉ cho đọc thuần. Mỗi lỗ này chỉ lộ khi viết thử một trang đối kháng.
+54. **Đừng gọi hàm nào mà trang thay được khi đang cầm hàm gốc trong tay.** `realFetch.apply(...)` đưa `fetch` gốc cho `Function.prototype.apply` mà trang đã đổi. Chụp `Reflect.apply`, `Reflect.construct`, `Promise.reject.bind` ngay ở đầu init script và chỉ gọi các bản đã chụp.
+55. **Đừng lọc bí mật trên cả kết quả:** giá trị bước gõ là `desktop` biến `page.desktop.png` thành `page.[REDACTED].png` và trạng thái `failed` thành `[REDACTED]`. Lọc theo schema, chỉ những trường đến từ trang hoặc từ người dùng; từ của chính báo cáo thì không.
+56. **Bộ lọc chạy trên nội dung trang (chạy đồng bộ, không timeout nào ngắt được) phải tuyến tính.** JWT và địa chỉ bằng regex là bậc hai trên `'eyJ'.repeat(n)` và `'https://x/'.repeat(n)` (10 giây); duyệt từng ký tự một lần thì hết. Mỗi mẫu mới thêm một chuỗi gài sẵn vào test tuyến tính.
+57. **Một comment chèn giữa câu lệnh nuốt mất cả lời gọi** (`keep // ghi chú (result...)`), và test chỉ khẳng định "danh sách rỗng" vẫn qua. Mỗi bộ lọc cần một test dương: một trường hợp có dữ liệu thật mà bộ lọc phải để lại.
+58. **Số liệu trong prompt gửi người review lấy từ lệnh chạy, không từ trí nhớ** (tôi viết 1 060 test, thật là 821).
+59. **Đột biến cho code có trình duyệt hay tiến trình thật: chạy riêng file test của mô-đun (`MUTATE_ONLY`)**, không cả bộ (132 giây một mutant); và dọn `pkill` các tiến trình thử sau mỗi lô, vì một mutant "giữ khoá" hay "không dừng server" để lại tiến trình làm hỏng lô sau.
+60. **Khoá bằng file mà không có khoá của hệ điều hành chỉ là cố gắng tốt nhất.** Công bố nguyên tử (ghi ra file tạm rồi `link`), chủ khoá có nonce, nhả chỉ khi còn là của mình, tiếp quản khoá cũ bằng cách chuyển sang tên riêng rồi xem lại nội dung. Vẫn còn khoảnh khắc ba lệnh cùng lúc; nói thẳng giới hạn đó thay vì hứa.
+

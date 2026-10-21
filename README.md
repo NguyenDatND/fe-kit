@@ -4,7 +4,7 @@ Bộ skill, agent và CLI cho dev Frontend, chạy giống nhau trên Claude Cod
 
 ## Trạng thái
 
-Phase 0 (spike) xong phần headless; Phase 1 xong phần không phụ thuộc GUI; Phase 2 (kiểm chứng code) xong phần code và nghiệm thu headless. Chưa cài gì vào thư mục toàn cục của bạn.
+Phase 0 (spike) xong phần headless; Phase 1 xong phần không phụ thuộc GUI; Phase 2 (kiểm chứng code) xong phần code và nghiệm thu headless; Phase 3 (xem UI thật) xong phần lõi. Chưa cài gì vào thư mục toàn cục của bạn.
 
 | Lệnh | Việc | Trạng thái |
 |---|---|---|
@@ -15,9 +15,13 @@ Phase 0 (spike) xong phần headless; Phase 1 xong phần không phụ thuộc G
 | `fe-kit rules --files …` | Tài liệu chuẩn nào áp dụng cho các file sắp sửa | có |
 | `fe-kit test` | Chạy test trong `.fe-kit/tests` bằng vitest hoặc jest của dự án | có |
 | `fe-kit verify` | scan, lint, type-check, test dự án, test local; ghi báo cáo | có |
-| `link`, `doctor`, `ui`, `mr`, `secrets`… | | chưa làm |
+| `fe-kit auth` | Lưu phiên đăng nhập cho một vai (bạn đăng nhập một lần trong cửa sổ trình duyệt) và kiểm nó | có |
+| `fe-kit ui` | Xem đích trong Chromium thật: ảnh nhiều viewport, lỗi console, request lỗi, kịch bản bước; đích dùng chung chỉ đọc | có |
+| `fe-kit dev` | Chạy, dừng, kiểm dev server của đích ở nền | có |
+| `fe-kit ui-act` | Như `ui` nhưng cho một request ghi đi qua | chưa bật (cần `shell-guard`) |
+| `link`, `doctor`, `mr`, `secrets`… | | chưa làm |
 
-Skill: `fe-standards`, `fe-verify` (`skills/`, trang giải thích ở `docs/skills/`).
+Skill: `fe-standards`, `fe-verify`, `fe-ui-check` (`skills/`, trang giải thích ở `docs/skills/`).
 
 ## Tài liệu
 
@@ -32,6 +36,7 @@ Skill: `fe-standards`, `fe-verify` (`skills/`, trang giải thích ở `docs/ski
 node bin/fe-kit.mjs context          # trong thư mục một dự án FE
 node bin/fe-kit.mjs init --dry-run
 node bin/fe-kit.mjs verify           # scan, lint, type-check, test; --json để máy đọc
+node bin/fe-kit.mjs ui --target local --path /   # cần hồ sơ có targets (xem docs/skills/fe-ui-check.md)
 npm test
 ```
 

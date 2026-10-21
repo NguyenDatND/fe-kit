@@ -93,9 +93,37 @@ test('--path says which page to open, and it cannot leave the target', async (t)
   await call(dir, env, ['login'], { target: 'staging', role: 'admin', path: '/signin?next=/' }, browser.deps)
   assert.equal(browser.calls.goto, 'https://staging.example.com/signin?next=/')
 
+  const quiet = fakeBrowser()
+  await call(dir, env, ['login'], { target: 'staging', role: 'admin', path: '/signin?token=FAKE_QUERY_SECRET#FAKE_FRAGMENT' }, quiet.deps)
+  assert.equal(quiet.calls.goto, 'https://staging.example.com/signin?token=FAKE_QUERY_SECRET#FAKE_FRAGMENT') // the browser gets the whole address
+  assert.match(quiet.calls.said.join('\n'), /Opened https:\/\/staging\.example\.com\/signin\./)
+  assert.ok(!quiet.calls.said.join('\n').includes('FAKE_'), 'what is said to the terminal has no query string')
+
   for (const path of ['//evil.example.com/x', 'https://evil.example.com/', 'signin']) {
     await assert.rejects(call(dir, env, ['login'], { target: 'staging', role: 'admin', path }, fakeBrowser().deps), UsageError, path)
   }
+})
+
+test('a page that cannot be opened is told without the address it was asked for, query string and all', async (t) => {
+  const { dir, env } = await setup(t)
+  const failing = fakeBrowser()
+  const launch = failing.deps.launchBrowser
+  failing.deps.launchBrowser = async (options) => {
+    const browser = await launch(options)
+    const newContext = browser.newContext
+    browser.newContext = async () => {
+      const context = await newContext()
+      context.newPage = async () => ({ goto: async (url) => { throw new Error(`page.goto: net::ERR_CONNECTION_REFUSED at ${url}\nCall log:\n  - navigating to "${url}"`) } })
+      return context
+    }
+    return browser
+  }
+
+  await assert.rejects(
+    call(dir, env, ['login'], { target: 'staging', role: 'admin', path: '/signin?token=FAKE_QUERY_SECRET' }, failing.deps),
+    (error) => error instanceof UsageError && /could not open https:\/\/staging\.example\.com\/signin/.test(error.message) && /ERR_CONNECTION_REFUSED/.test(error.message) && !error.message.includes('FAKE_') && !error.message.includes('Call log'),
+  )
+  assert.equal(failing.calls.closed, 1)
 })
 
 test('login needs a terminal: with none it refuses before a browser is opened', async (t) => {

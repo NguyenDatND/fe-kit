@@ -9,6 +9,12 @@ import { canTestPermissions, tempDir } from './helpers.mjs'
 const state = { cookies: [{ name: 'sid', value: 'FAKE_COOKIE_VALUE', domain: 'localhost', path: '/', expires: -1 }], origins: [{ origin: 'http://localhost:5173', localStorage: [{ name: 'token', value: 'FAKE_TOKEN_VALUE' }] }] }
 const modeOf = async (path) => (await lstat(path)).mode & 0o777
 
+/** The folders of the saved logins as `saveSession` makes them, made by hand so that a test can put something in them first. */
+async function privateFolders(root, { profile = true } = {}) {
+  await mkdir(join(root, 'auth'), { mode: 0o700 })
+  if (profile) await mkdir(join(root, 'auth', 'p'), { mode: 0o700 })
+}
+
 test('the state folder is FE_KIT_STATE_DIR when set, else ~/.local/state/fe-kit under the home folder', () => {
   assert.equal(stateRoot({ FE_KIT_STATE_DIR: '/x/state' }), '/x/state')
   assert.equal(stateRoot({ HOME: '/home/me' }), '/home/me/.local/state/fe-kit')
@@ -56,7 +62,7 @@ test('a session file that is a symlink is replaced, not written through to what 
   const file = sessionPath(root, { profile: 'p', target: 't', role: 'r' })
   const elsewhere = join(root, 'elsewhere.txt')
   await writeFile(elsewhere, 'keep me')
-  await mkdir(join(root, 'auth', 'p'), { recursive: true })
+  await privateFolders(root)
   await symlink(elsewhere, file)
 
   await saveSession(file, state)
@@ -68,27 +74,76 @@ test('a session file that is a symlink is replaced, not written through to what 
 test('a folder in the path that is a symlink is refused, so a session is never written outside the state folder', async (t) => {
   const root = await tempDir(t)
   const outside = await tempDir(t)
-  await mkdir(join(root, 'auth'), { recursive: true })
+  await privateFolders(root, { profile: false })
   await symlink(outside, join(root, 'auth', 'p'))
 
   await assert.rejects(saveSession(sessionPath(root, { profile: 'p', target: 't', role: 'r' }), state), UsageError)
   assert.deepEqual(await readdir(outside), [])
 })
 
+test('a folder in the path that is a link is refused for reading and for status too, even when the file behind it is real', async (t) => {
+  const root = await tempDir(t)
+  const real = await tempDir(t)
+  await writeFile(join(real, 't.r.json'), JSON.stringify(state), { mode: 0o600 })
+  await privateFolders(root, { profile: false })
+  await symlink(real, join(root, 'auth', 'p'))
+  const file = sessionPath(root, { profile: 'p', target: 't', role: 'r' })
+
+  await assert.rejects(readSession(file), UsageError)
+  const status = await sessionStatus(file)
+  assert.equal(status.state, 'unsafe')
+  assert.match(status.problem, /link/)
+})
+
+test('a folder that others can enter is refused for reading and for saving, until it is made private', { skip: !canTestPermissions }, async (t) => {
+  for (const [folder, mode] of [['auth', 0o755], ['auth/p', 0o755], ['auth', 0o750], ['auth/p', 0o710]]) {
+    const root = await tempDir(t)
+    const file = sessionPath(root, { profile: 'p', target: 't', role: 'r' })
+    await saveSession(file, state)
+    await chmod(join(root, folder), mode)
+
+    await assert.rejects(readSession(file), (error) => error instanceof UsageError && /chmod 700/.test(error.message), `read ${folder}`)
+    await assert.rejects(saveSession(file, state), (error) => error instanceof UsageError && /chmod 700/.test(error.message), `save ${folder}`)
+
+    await chmod(join(root, folder), 0o700)
+    assert.deepEqual(await readSession(file), state)
+  }
+})
+
+test('a session file that others can read is not read', { skip: !canTestPermissions }, async (t) => {
+  const root = await tempDir(t)
+  const file = sessionPath(root, { profile: 'p', target: 't', role: 'r' })
+  await saveSession(file, state)
+  await chmod(file, 0o640)
+
+  await assert.rejects(readSession(file), (error) => error instanceof UsageError && /chmod 600/.test(error.message))
+
+  await chmod(file, 0o600)
+  assert.deepEqual(await readSession(file), state)
+})
+
+test('a session whose folders do not exist yet reads as null, not as an error', async (t) => {
+  const root = await tempDir(t)
+
+  assert.equal(await readSession(sessionPath(root, { profile: 'p', target: 't', role: 'r' })), null)
+  await mkdir(join(root, 'auth'), { mode: 0o700 })
+  assert.equal(await readSession(sessionPath(root, { profile: 'p', target: 't', role: 'r' })), null)
+})
+
 test('reading a session file that is a symlink is refused', async (t) => {
   const root = await tempDir(t)
   const file = sessionPath(root, { profile: 'p', target: 't', role: 'r' })
-  await mkdir(join(root, 'auth', 'p'), { recursive: true })
+  await privateFolders(root)
   await writeFile(join(root, 'real.json'), JSON.stringify(state))
   await symlink(join(root, 'real.json'), file)
 
-  await assert.rejects(readSession(file), UsageError)
+  await assert.rejects(readSession(file), (error) => error instanceof UsageError && /link/.test(error.message))
 })
 
 test('a file that is not a session (bad JSON, no cookies list) is refused with a usage error that does not repeat its content', async (t) => {
   const root = await tempDir(t)
   const file = sessionPath(root, { profile: 'p', target: 't', role: 'r' })
-  await mkdir(join(root, 'auth', 'p'), { recursive: true })
+  await privateFolders(root)
 
   await writeFile(file, '{ FAKE_SECRET not json')
   await assert.rejects(readSession(file), (error) => error instanceof UsageError && !error.message.includes('FAKE_SECRET'))
@@ -160,7 +215,7 @@ test('status flags a file that only its group can read, and a folder that others
 test('status of a link is "unsafe", and its target is not read', async (t) => {
   const root = await tempDir(t)
   const file = sessionPath(root, { profile: 'p', target: 't', role: 'r' })
-  await mkdir(join(root, 'auth', 'p'), { recursive: true })
+  await privateFolders(root)
   await writeFile(join(root, 'real.json'), JSON.stringify(state))
   await symlink(join(root, 'real.json'), file)
 
@@ -172,7 +227,8 @@ test('status of a link is "unsafe", and its target is not read', async (t) => {
 test('a save that fails leaves no temporary file behind', async (t) => {
   const root = await tempDir(t)
   const file = sessionPath(root, { profile: 'p', target: 't', role: 'r' })
-  await mkdir(file, { recursive: true }) // a folder where the file should go: the final rename cannot succeed
+  await privateFolders(root)
+  await mkdir(file, { mode: 0o700 }) // a folder where the file should go: the final rename cannot succeed
 
   await assert.rejects(saveSession(file, state))
 
