@@ -87,3 +87,10 @@ Ghi sau mỗi lần bị sửa (người dùng hoặc reviewer): mẫu lỗi và
 59. **Đột biến cho code có trình duyệt hay tiến trình thật: chạy riêng file test của mô-đun (`MUTATE_ONLY`)**, không cả bộ (132 giây một mutant); và dọn `pkill` các tiến trình thử sau mỗi lô, vì một mutant "giữ khoá" hay "không dừng server" để lại tiến trình làm hỏng lô sau.
 60. **Khoá bằng file mà không có khoá của hệ điều hành chỉ là cố gắng tốt nhất.** Công bố nguyên tử (ghi ra file tạm rồi `link`), chủ khoá có nonce, nhả chỉ khi còn là của mình, tiếp quản khoá cũ bằng cách chuyển sang tên riêng rồi xem lại nội dung. Vẫn còn khoảnh khắc ba lệnh cùng lúc; nói thẳng giới hạn đó thay vì hứa.
 
+
+## 2026-10-21 — Phase 1b (shell-guard): review kế hoạch 2 lượt của Codex (`tasks/phase-1b.md`)
+
+61. **Tín hiệu "đã cài" không phải bằng chứng "đang bảo vệ".** Manifest, file cấu hình và lần chạy thử hook đều không gắn với tool đang gọi và agent ghi được hết; cổng mở dựa vào chúng là cổng giả. Điều agent không làm được thì mới đáng làm cổng: một người gõ `yes` trên `/dev/tty`.
+62. **Khi nhiều lớp cùng bắt một đầu vào, kiểm đột biến chỉ ra lớp nào chưa có test riêng.** `cat ~/.config/fe-kit/env` bị chữ `.config/fe-kit` bắt trước nên mọi đột biến của việc giải đường dẫn, symlink, glob đều "sống". Mỗi lớp cần một đầu vào mà chỉ lớp đó thấy: thư mục state tuỳ chỉnh không có chữ nhận diện, HOME là symlink, glob từ thư mục cha, `cwd` trong kho với lệnh không có đối số.
+63. **Test tiến trình thật đặt `await` trước khi gọi hàm cần gắn handler thì mất sự kiện.** `setImmediate(() => stream.destroy(err))` rồi `workerPath: await worker(...)` làm lỗi phát ra khi chưa có `on('error')`; tính mọi thứ cần `await` trước khi tạo luồng.
+64. **Mỗi mã "dự phòng" thừa là một đột biến sống:** `skipNewlines` sau toán tử, kiểm `(` giữa lệnh, kiểm `;;` đều bị vòng lặp chính đã bắt; bỏ đi thì ngắn hơn và vẫn xanh. Đột biến sống thì hoặc thêm test, hoặc xoá mã.
