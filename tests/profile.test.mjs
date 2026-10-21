@@ -330,7 +330,7 @@ test('redactCredentials hides the userinfo of every URL, whatever it holds, and 
 })
 
 test('validateProfile warns about a literal password only: references, a bare username and no userinfo pass', () => {
-  const warned = (url) => validateProfile({ name: 'x', match: { paths: ['/p'] }, targets: { url } }).length > 0
+  const warned = (url) => validateProfile({ name: 'x', match: { paths: ['/p'] }, targets: { staging: { url } } }).length > 0
   const literal = [
     'https://admin:hunter2@h',
     'https://admin:p@ss@h',
@@ -368,13 +368,13 @@ test('a credential in a map key is masked, and a field path never shows it', () 
   const data = {
     name: 'x',
     match: { paths: ['/p'] },
-    targets: { 'https://u:FAKE_SECRET@h': { url: 'https://v:OTHER_SECRET@h' } },
+    extras: { 'https://u:FAKE_SECRET@h': { url: 'https://v:OTHER_SECRET@h' } },
   }
 
-  assert.deepEqual(redactCredentials(data.targets), { 'https://[REDACTED]@h': { url: 'https://[REDACTED]@h' } })
+  assert.deepEqual(redactCredentials(data.extras), { 'https://[REDACTED]@h': { url: 'https://[REDACTED]@h' } })
   assert.deepEqual(validateProfile(data), [
-    '"targets.https://[REDACTED]@h" has a literal password in a URL; use ${env:NAME} instead',
-    '"targets.https://[REDACTED]@h.url" has a literal password in a URL; use ${env:NAME} instead',
+    '"extras.https://[REDACTED]@h" has a literal password in a URL; use ${env:NAME} instead',
+    '"extras.https://[REDACTED]@h.url" has a literal password in a URL; use ${env:NAME} instead',
   ])
 })
 
@@ -382,15 +382,15 @@ test('field paths carry the same unique safe label as the redacted keys', () => 
   const problems = validateProfile({
     name: 'x',
     match: { paths: ['/p'] },
-    targets: { 'https://u:a@host': { url: 'https://v:b@h' }, 'https://u:c@host': { url: 'https://v:d@h' } },
+    extras: { 'https://u:a@host': { url: 'https://v:b@h' }, 'https://u:c@host': { url: 'https://v:d@h' } },
   })
 
   const message = (path) => `"${path}" has a literal password in a URL; use \${env:NAME} instead`
   assert.deepEqual(problems, [
-    message('targets.https://[REDACTED]@host'),
-    message('targets.https://[REDACTED]@host.url'),
-    message('targets.https://[REDACTED]@host (2)'),
-    message('targets.https://[REDACTED]@host (2).url'),
+    message('extras.https://[REDACTED]@host'),
+    message('extras.https://[REDACTED]@host.url'),
+    message('extras.https://[REDACTED]@host (2)'),
+    message('extras.https://[REDACTED]@host (2).url'),
   ])
 })
 

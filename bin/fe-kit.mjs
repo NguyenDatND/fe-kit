@@ -6,8 +6,8 @@ import { parseArgs } from 'node:util'
 import { UsageError } from '../src/lib/errors.mjs'
 
 const kitRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-const AVAILABLE = ['context', 'init', 'validate', 'scan', 'rules', 'test', 'verify']
-const PLANNED = ['dev', 'auth', 'ui', 'ui-act', 'mr', 'mcp', 'mcp-run', 'secrets', 'link', 'unlink', 'doctor']
+const AVAILABLE = ['context', 'init', 'validate', 'scan', 'rules', 'test', 'verify', 'auth']
+const PLANNED = ['dev', 'ui', 'ui-act', 'mr', 'mcp', 'mcp-run', 'secrets', 'link', 'unlink', 'doctor']
 
 const HELP = `fe-kit: frontend kit for Claude Code, Codex and Antigravity
 
@@ -21,6 +21,7 @@ Commands:
   rules      which standards documents apply to the files you are about to change
   test       run the tests in .fe-kit/tests with the project's own vitest or jest
   verify     scan, lint, type-check, project tests and local tests, with a report
+  auth       save a login for a role (you log in once, in a browser window) and check it
 
 Not implemented yet: ${PLANNED.join(', ')}
 

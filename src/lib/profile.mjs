@@ -6,6 +6,7 @@ import { isQuoted } from './exec.mjs'
 import { describeYamlError, parseFrontmatter } from './frontmatter.mjs'
 import { isInside } from './fsx.mjs'
 import { isValidGlob } from './glob.mjs'
+import { targetProblems } from './targets.mjs'
 
 const TEST_POLICIES = ['auto', 'commit', 'local-only']
 
@@ -189,6 +190,7 @@ export function validateProfile(data) {
   if (data?.standards !== undefined && !isStringList(data.standards)) problems.push('"standards" must be a list of strings')
   else if (isStringList(data?.standards) && !data.standards.every(isValidGlob)) problems.push('"standards" has a glob that is not valid')
   for (const problem of scanProblems(data?.scan)) problems.push(problem)
+  for (const problem of targetProblems(data?.targets, data?.roles)) problems.push(problem)
   for (const path of literalPasswordPaths(data)) {
     problems.push(`"${path}" has a literal password in a URL; use \${env:NAME} instead`)
   }
