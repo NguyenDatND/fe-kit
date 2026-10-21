@@ -4,7 +4,7 @@ import { loadPlaywright } from '../lib/browser.mjs'
 import { UsageError } from '../lib/errors.mjs'
 import { plural } from '../lib/format.mjs'
 import { resolveProject } from '../lib/project.mjs'
-import { resolveUiTarget } from '../lib/ui-target.mjs'
+import { resolvePagePath, resolveUiTarget } from '../lib/ui-target.mjs'
 
 export const options = { target: { type: 'string' }, role: { type: 'string' }, path: { type: 'string' } }
 
@@ -49,10 +49,7 @@ async function status(resolved, { now = Date.now } = {}) {
 }
 
 async function login(resolved, flags, deps) {
-  const page = flags.path ?? '/'
-  // `//host/x` and `https://host/x` resolve to another site; a login page must be on the target itself.
-  const address = page.startsWith('/') ? new URL(page, resolved.url) : null
-  if (address === null || address.origin !== resolved.origin) throw new UsageError('--path must be a path on the target, starting with a single /')
+  const address = resolvePagePath(resolved, flags.path)
   if (!deps.isInteractive) {
     throw new UsageError(`auth login waits for you to log in, so it needs a terminal: run \`${loginCommand({ target: resolved.targetName, role: resolved.role })}\` yourself`)
   }

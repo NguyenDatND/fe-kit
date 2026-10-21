@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { UsageError } from '../src/lib/errors.mjs'
-import { resolveUiTarget } from '../src/lib/ui-target.mjs'
+import { resolvePagePath, resolveUiTarget } from '../src/lib/ui-target.mjs'
 
 const settings = {
   name: 'shop',
@@ -82,4 +82,15 @@ test('the address never carries a value of the environment into the error', () =
   const odd = { name: 'x', targets: { t: { url: '${env:SHOP_URL}' } } }
 
   assert.throws(() => resolveUiTarget({ settings: odd, flags: { target: 't' }, env: { SHOP_URL: 'ftp://user:FAKE_SECRET@h' } }), (error) => error instanceof UsageError && !error.message.includes('FAKE_SECRET'))
+})
+
+test('a page path is resolved against the target, and one that would leave the target is a usage error', () => {
+  const resolved = resolve({ target: 'staging' })
+
+  assert.equal(resolvePagePath(resolved, undefined).href, 'https://staging.example.com/app')
+  assert.equal(resolvePagePath(resolved, '/').href, 'https://staging.example.com/')
+  assert.equal(resolvePagePath(resolved, '/orders?tab=1').href, 'https://staging.example.com/orders?tab=1')
+  for (const path of ['//evil.example.com/x', 'https://evil.example.com/', 'orders', '', '/\\evil.example.com', '/a b']) {
+    assert.throws(() => resolvePagePath(resolved, path), (error) => error instanceof UsageError && /--path/.test(error.message), JSON.stringify(path))
+  }
 })

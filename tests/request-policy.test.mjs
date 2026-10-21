@@ -24,6 +24,11 @@ test('reads always pass, and a target that is not read-only lets everything thro
   assert.equal(policy({ readOnly: false }).decide(post('/orders', json({ a: 1 }))).allow, true)
 })
 
+test('the policy says whether its target is read-only', () => {
+  assert.equal(policy().readOnly, true)
+  assert.equal(policy({ readOnly: false }).readOnly, false)
+})
+
 test('on a read-only target every write method is refused, with the reason', () => {
   for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'TRACE', 'CONNECT', 'PURGE', 'post']) {
     const decision = policy().decide({ method, url: `${ORIGIN}/orders`, headers: {}, body: null })

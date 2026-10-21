@@ -194,6 +194,7 @@ export function createRequestPolicy({ origin, readOnly, safeRequests = [], allow
   const deny = (reason) => ({ allow: false, reason })
 
   return {
+    readOnly,
     decide({ method, url, headers, body }) {
       const verb = String(method).toUpperCase()
       if (READ_METHODS.has(verb)) return allow('read')

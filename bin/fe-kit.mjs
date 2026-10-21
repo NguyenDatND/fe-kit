@@ -6,8 +6,8 @@ import { parseArgs } from 'node:util'
 import { UsageError } from '../src/lib/errors.mjs'
 
 const kitRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-const AVAILABLE = ['context', 'init', 'validate', 'scan', 'rules', 'test', 'verify', 'auth']
-const PLANNED = ['dev', 'ui', 'ui-act', 'mr', 'mcp', 'mcp-run', 'secrets', 'link', 'unlink', 'doctor']
+const AVAILABLE = ['context', 'init', 'validate', 'scan', 'rules', 'test', 'verify', 'auth', 'ui']
+const PLANNED = ['dev', 'ui-act', 'mr', 'mcp', 'mcp-run', 'secrets', 'link', 'unlink', 'doctor']
 
 const HELP = `fe-kit: frontend kit for Claude Code, Codex and Antigravity
 
@@ -22,10 +22,11 @@ Commands:
   test       run the tests in .fe-kit/tests with the project's own vitest or jest
   verify     scan, lint, type-check, project tests and local tests, with a report
   auth       save a login for a role (you log in once, in a browser window) and check it
+  ui         look at the target in a browser: pictures, console errors, failed requests, steps
 
 Not implemented yet: ${PLANNED.join(', ')}
 
-Exit codes: 0 ok, 1 problems found, 2 usage error, 70 unexpected failure.
+Exit codes: 0 ok, 1 problems found, 2 usage error, 3 saved login gone (ui), 70 unexpected failure.
 `
 
 async function main(argv) {

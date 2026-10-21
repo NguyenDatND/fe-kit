@@ -57,3 +57,14 @@ export function resolveUiTarget({ settings, flags, env, roleRequired = false }) 
     statePath: role === undefined ? undefined : sessionPath(stateRoot(env), { profile: settings.name, target: targetName, role }),
   }
 }
+
+/**
+ * The page `--path` names, on the target. Without `--path` it is the address of the target itself. A path such as `//host/x`
+ * or `/\host` would resolve to another site, and a login or a picture must never be taken there.
+ */
+export function resolvePagePath(resolved, path) {
+  if (path === undefined) return new URL(resolved.url)
+  const address = /^\/(?!\/)[^\s\\]*$/.test(path) ? new URL(path, resolved.url) : null
+  if (address === null || address.origin !== resolved.origin) throw new UsageError('--path must be a path on the target, starting with a single /')
+  return address
+}

@@ -1,0 +1,10 @@
+[
+  { "action": "goto", "path": "/dashboard" },
+  { "action": "waitFor", "selector": "[data-testid=orders-table]" },
+  { "action": "expectVisible", "selector": "h1" },
+  { "action": "expectText", "text": "Orders", "selector": "h1" },
+  { "action": "click", "selector": "text=New order" },
+  { "action": "fill", "selector": "#customer", "value": "Test customer" },
+  { "action": "press", "selector": "#customer", "key": "Tab" },
+  { "action": "screenshot", "name": "new-order-form" }
+]
