@@ -1,0 +1,14 @@
+{
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "turn_id": "00000000-0000-0000-0000-000000000000",
+  "transcript_path": "<HOME>/.codex/sessions/2026/10/18/rollout-2026-10-18T03-04-20-00000000-0000-0000-0000-000000000000.jsonl",
+  "cwd": "<HOME>/Code/fe-kit/spike/guard/codex",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-6.1-sol",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "apply_patch",
+  "tool_input": {
+    "command": "*** Begin Patch\n*** Add File: <HOME>/Code/fe-kit/spike/guard/codex/patch-note.txt\n+hello patch\n*** End Patch"
+  },
+  "tool_use_id": "exec-00000000-0000-0000-0000-000000000000"
+}

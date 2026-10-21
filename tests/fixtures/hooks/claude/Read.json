@@ -1,0 +1,16 @@
+{
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "transcript_path": "<HOME>/.claude/projects/-HOME-Code-fe-kit-spike-guard-claude/00000000-0000-0000-0000-000000000000.jsonl",
+  "cwd": "<HOME>/Code/fe-kit/spike/guard/claude",
+  "prompt_id": "00000000-0000-0000-0000-000000000000",
+  "permission_mode": "default",
+  "effort": {
+    "level": "xhigh"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "<HOME>/Code/fe-kit/spike/guard/claude/package.json"
+  },
+  "tool_use_id": "toolu_TEST"
+}

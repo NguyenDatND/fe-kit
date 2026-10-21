@@ -1,0 +1,20 @@
+{
+  "artifactDirectoryPath": "<HOME>/.gemini/antigravity-cli/brain/00000000-0000-0000-0000-000000000000",
+  "conversationId": "00000000-0000-0000-0000-000000000000",
+  "modelName": "gemini-3.8-flash-high",
+  "stepIdx": 2,
+  "toolCall": {
+    "args": {
+      "CommandLine": "echo hello-fixture",
+      "Cwd": "<HOME>/Code/fe-kit/spike/guard/agy",
+      "WaitMsBeforeAsync": 5000,
+      "toolAction": "Running echo command",
+      "toolSummary": "Run echo hello-fixture"
+    },
+    "name": "run_command"
+  },
+  "transcriptPath": "<HOME>/.gemini/antigravity-cli/brain/00000000-0000-0000-0000-000000000000/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": [
+    "<HOME>/Code/fe-kit/spike/guard/agy"
+  ]
+}
