@@ -25,7 +25,7 @@ PASS typecheck  npx tsc -b (0.8s)
 FAIL test       npm run test -- --exclude '.fe-kit/**' (exit 1, 1.0s)
        > fe-kit-sandbox@0.0.0 test
        > vitest run --exclude .fe-kit/**
-        RUN  v5.0.5 /Users/teavillageboy/.claude/jobs/d5aa9a63/tmp/accept/scenario
+        RUN  v5.0.5 <scenario>
         ❯ src/Panel.test.tsx (1 test | 1 failed) 11ms
           × shows the html it is given 11ms
        ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
@@ -90,9 +90,9 @@ Câu trả lời cuối (lần 1):
 > 
 > The blockers are:
 > 
-> - [Panel.tsx:1](/Users/teavillageboy/.claude/jobs/d5aa9a63/tmp/accept/scenario/src/Panel.tsx:1): explicit `any` violates the scan rule.
-> - [Panel.tsx:2](/Users/teavillageboy/.claude/jobs/d5aa9a63/tmp/accept/scenario/src/Panel.tsx:2): unsanitized HTML rendering is flagged as an XSS risk.
-> - [Panel.test.tsx:7](/Users/teavillageboy/.claude/jobs/d5aa9a63/tmp/accept/scenario/src/Panel.test.tsx:7): the test expects `"bye"` after rendering `"hi"`.
+> - [Panel.tsx:1](<scenario>/src/Panel.tsx:1): explicit `any` violates the scan rule.
+> - [Panel.tsx:2](<scenario>/src/Panel.tsx:2): unsanitized HTML rendering is flagged as an XSS risk.
+> - [Panel.test.tsx:7](<scenario>/src/Panel.test.tsx:7): the test expects `"bye"` after rendering `"hi"`.
 > 
 > | Check | Command | Result |
 > |---|---|---|
@@ -104,7 +104,7 @@ Câu trả lời cuối (lần 1):
 > 
 > Both Panel files are also untracked. I made no source changes.
 > 
-> [Full verification report](/Users/teavillageboy/.claude/jobs/d5aa9a63/tmp/accept/scenario/.fe-kit/reports/verify-2026-10-18T17-42-06-259Z.md)
+> [Full verification report](<scenario>/.fe-kit/reports/verify-2026-10-18T17-42-06-259Z.md)
 
 ## Antigravity `agy` (headless)
 
@@ -115,7 +115,7 @@ Hỏi riêng "liệt kê skill bạn thấy trong workspace" thì `agy` trả `f
 > Running `fe-kit verify` against the current changes returned:
 > **`Result: FAILED (scan, test). Not verified: typecheck.`**
 > 
-> Full report: [verify-2026-10-18T17-43-11-630Z.md](file:///Users/teavillageboy/.claude/jobs/d5aa9a63/tmp/accept/scenario/.fe-kit/reports/verify-2026-10-18T17-43-11-630Z.md)
+> Full report: [verify-2026-10-18T17-43-11-630Z.md](file://<scenario>/.fe-kit/reports/verify-2026-10-18T17-43-11-630Z.md)
 > 
 > ---
 > 
@@ -133,11 +133,11 @@ Hỏi riêng "liệt kê skill bạn thấy trong workspace" thì `agy` trả `f
 > 
 > ### Failures to Address
 > 
-> 1. **Rule Scan Failures** in [`src/Panel.tsx`](file:///Users/teavillageboy/.claude/jobs/d5aa9a63/tmp/accept/scenario/src/Panel.tsx#L1-L3):
->    - [`src/Panel.tsx:1`](file:///Users/teavillageboy/.claude/jobs/d5aa9a63/tmp/accept/scenario/src/Panel.tsx#L1) (`no-explicit-any`): Explicit `any` turns type checking off; use a specific type or `unknown`.
->    - [`src/Panel.tsx:2`](file:///Users/teavillageboy/.claude/jobs/d5aa9a63/tmp/accept/scenario/src/Panel.tsx#L2) (`dangerously-set-inner-html`): `dangerouslySetInnerHTML` renders raw HTML, presenting an XSS risk; sanitize the input or avoid it.
+> 1. **Rule Scan Failures** in [`src/Panel.tsx`](file://<scenario>/src/Panel.tsx#L1-L3):
+>    - [`src/Panel.tsx:1`](file://<scenario>/src/Panel.tsx#L1) (`no-explicit-any`): Explicit `any` turns type checking off; use a specific type or `unknown`.
+>    - [`src/Panel.tsx:2`](file://<scenario>/src/Panel.tsx#L2) (`dangerously-set-inner-html`): `dangerouslySetInnerHTML` renders raw HTML, presenting an XSS risk; sanitize the input or avoid it.
 > 
-> 2. **Test Failure** in [`src/Panel.test.tsx`](file:///Users/teavillageboy/.claude/jobs/d5aa9a63/tmp/accept/scenario/src/Panel.test.tsx#L5-L8):
+> 2. **Test Failure** in [`src/Panel.test.tsx`](file://<scenario>/src/Panel.test.tsx#L5-L8):
 >    - `shows the html it is given`:
 >      ```text
 >      AssertionError: expected 'hi' to be 'bye'
