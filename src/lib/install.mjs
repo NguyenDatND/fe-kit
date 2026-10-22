@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { access, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { access, lstat, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
@@ -147,10 +147,10 @@ export async function buildPlan({ kitRoot, home, env, node, tools, mode = defaul
   return { tools: plan, problems }
 }
 
-/** Journal first, then the skills, then each file, then the record. `deps.beforeCommit(item)` and `deps.beforeRecord()` are seams for tests. */
+/** Journal first, then the skills, then each file, then the record. `deps.beforeSkill(skill)`, `deps.beforeCommit(item)` and `deps.beforeRecord()` are seams for tests. */
 export async function applyPlan(plan, { stateDir, kitRoot, node, deps = {} }) {
   const changing = Object.values(plan.tools).flatMap((entry) => entry.files).filter((item) => item.action !== 'unchanged')
-  const skills = Object.entries(plan.tools).flatMap(([tool, entry]) => entry.skills.filter((skill) => skill.action !== 'unchanged').map((skill) => ({ tool, name: skill.name, mode: entry.mode })))
+  const skills = Object.entries(plan.tools).flatMap(([tool, entry]) => entry.skills.filter((skill) => skill.action !== 'unchanged').map((skill) => ({ tool, name: skill.name, target: skill.target, mode: entry.mode })))
   if (changing.length > 0 || skills.length > 0) {
     await writePrivateJson(journalPath(stateDir), {
       op: 'link',
@@ -160,7 +160,13 @@ export async function applyPlan(plan, { stateDir, kitRoot, node, deps = {} }) {
       items: changing.map((item) => ({ tool: item.tool, file: item.file, kind: item.kind, beforeHash: item.before === null ? null : hashText(item.before), afterHash: hashText(item.after), added: item.added ?? null, createdFile: item.createdFile })),
     })
   }
-  for (const entry of Object.values(plan.tools)) for (const skill of entry.skills) if (skill.action !== 'unchanged') await installDirectory(skill.source, skill.target, { mode: entry.mode })
+  for (const entry of Object.values(plan.tools)) {
+    for (const skill of entry.skills) {
+      if (skill.action === 'unchanged') continue
+      await deps.beforeSkill?.(skill)
+      await installDirectory(skill.source, skill.target, { mode: entry.mode })
+    }
+  }
   const backups = []
   for (const item of changing) {
     const { backup } = await writeTextSafely(item.file, item.after, { expectedBefore: item.before, backupDir: backupsPath(stateDir), beforeCommit: () => deps.beforeCommit?.(item) })
@@ -186,6 +192,12 @@ export async function applyPlan(plan, { stateDir, kitRoot, node, deps = {} }) {
   return { backups }
 }
 
+/** `symlink` for a link, `copy` for anything else that is there (a skill that is not the kit's was never put in a journal: the run refuses it), null for nothing. */
+async function skillModeAt(target) {
+  const info = await lstat(target).catch(() => null)
+  return info === null ? null : info.isSymbolicLink() ? 'symlink' : 'copy'
+}
+
 /** Finishes what an earlier run began, by comparing each file with what the journal said it would be before and after. Returns what it found. */
 export async function recover(stateDir) {
   const journal = await readJsonFile(journalPath(stateDir))
@@ -196,9 +208,16 @@ export async function recover(stateDir) {
   const conflicts = []
   let done = 0
   // A run that stopped after making skills and before it wrote the record: the skills are the kit's, whatever became of the files.
-  for (const skill of journal.op === 'link' ? journal.skills ?? [] : []) {
+  const skills = journal.op === 'link' ? journal.skills ?? [] : []
+  for (const skill of skills) {
     const known = state.tools[skill.tool] ?? { mode: skill.mode, skills: [], files: [] }
-    state.tools[skill.tool] = { ...known, mode: skill.mode, skills: [...new Set([...known.skills, skill.name])] } // the mode of the latest run: what it left is what the record must describe
+    state.tools[skill.tool] = { ...known, skills: [...new Set([...known.skills, skill.name])] }
+  }
+  // The mode of the run is the mode of the record only once every skill it was to change is that: a stop in the middle of a
+  // switch from links to copies leaves some of each, and the run that finishes the switch writes the mode then.
+  for (const tool of new Set(skills.map((skill) => skill.tool))) {
+    const mine = skills.filter((skill) => skill.tool === tool)
+    if ((await Promise.all(mine.map((skill) => skillModeAt(skill.target)))).every((mode) => mode === mine[0].mode)) state.tools[tool].mode = mine[0].mode
   }
   for (const item of journal.items) {
     const current = await readTextIfExists(item.file).catch(() => undefined)

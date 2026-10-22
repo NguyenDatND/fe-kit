@@ -552,3 +552,27 @@ test('a switch from links to copies that stops before the record is written is r
   assert.equal(next.exitCode, 0, next.text)
   for (const tool of ['claude', 'codex', 'antigravity']) assert.equal((await readJson(join(state, 'install.json'))).tools[tool].mode, 'copy', tool)
 })
+
+test('the mode of an interrupted switch is recorded only for what the skills really are', async (t) => {
+  const modeOf = async (state, tool) => (await readJson(join(state, 'install.json'))).tools[tool].mode
+  // stopped before any skill was changed: still links, and a command about other tools must not call them copies
+  const first = await setup(t)
+  await first.link({ yes: true })
+  const crashedEarly = await first.link({ yes: true, copy: true }, { beforeSkill: () => { throw new Error('killed') } }).catch((error) => error.message)
+  assert.equal(crashedEarly, 'killed')
+  await first.unlink({ yes: true, tools: 'codex' })
+  assert.equal(await modeOf(first.state, 'claude'), 'symlink')
+  assert.equal(await modeOf(first.state, 'antigravity'), 'symlink')
+
+  // stopped between two skills of one tool: not yet all copies, so the old mode stands until the run is finished
+  const second = await setup(t)
+  await second.link({ yes: true })
+  let seen = 0
+  const crashedMid = await second.link({ yes: true, copy: true }, { beforeSkill: (skill) => { if (skill.target.includes('/.claude/') && ++seen === 3) throw new Error('killed') } }).catch((error) => error.message)
+  assert.equal(crashedMid, 'killed')
+  await second.unlink({ yes: true, tools: 'codex' })
+  assert.equal(await modeOf(second.state, 'claude'), 'symlink')
+  const finished = await second.link({ yes: true, copy: true })
+  assert.equal(finished.exitCode, 0, finished.text)
+  for (const tool of ['claude', 'antigravity']) assert.equal(await modeOf(second.state, tool), 'copy', tool)
+})

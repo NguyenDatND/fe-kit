@@ -106,4 +106,6 @@ Ghi sau mỗi lần bị sửa (người dùng hoặc reviewer): mẫu lỗi và
 71. **Luồng đọc từ file handle chờ lần đọc đang chạy khi đóng:** với `/dev/tty` không ai gõ, lần đọc không bao giờ xong. Dùng `tty.ReadStream` rồi `destroy()`; chỉ test được bằng pty thật (`script`), PassThrough giả không tái hiện.
 72. **Bộ đếm "đã có đường dẫn chưa" phải phân loại từng từ (pattern, giá trị option, đường dẫn), không đếm gộp**; option chưa biết thì hỏi người, đừng đoán theo hướng cho qua.
 73. **`tty.ReadStream` mở lại terminal cho riêng nó và giữ một descriptor sau `destroy()` (đo bằng `/dev/fd` trong pty thật):** chỉ đóng được phần của mình; đo trước khi tin lời "đã đóng".
+74. **Giá trị gắn với option (`--file=x`, `-fx`) là một tên riêng:** kiểm đường dẫn trên từ nguyên vẹn (`--file=x`) sẽ bỏ sót. Tách giá trị ra rồi mới kiểm.
+75. **Ghi vào record "điều đã xảy ra" từ journal chỉ ghi ý định là ghi sai nếu tiến trình dừng giữa chừng:** đọc trạng thái thực (symlink hay bản sao) rồi mới chốt.
 

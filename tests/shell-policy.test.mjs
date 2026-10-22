@@ -351,3 +351,35 @@ test('a search is told apart from its pattern, its options and the folders it is
   assert.equal(decide('rg . .config', fromHome), 'deny', 'the folder after the pattern still counts')
   assert.equal(decide('rg .config/fe-kit', at(join(home, 'project'))), 'deny', 'a pattern that names a store is still refused as text')
 })
+
+test('a file an option names is read as a file, whether the name is attached to the option or not', async (t) => {
+  const { home, at } = await setup(t)
+  await mkdir(join(home, '.local/state/fe-kit/auth/p'), { recursive: true })
+  const state = at(join(home, '.local/state/fe-kit'))
+  const denied = [
+    'rg --file=auth/p/t.json /tmp/input.txt', 'rg -fauth/p/t.json /tmp/input.txt', 'rg -f auth/p/t.json /tmp/input.txt', 'rg --file auth/p/t.json /tmp/input.txt', 'rg -nfauth/p/t.json /tmp/input.txt',
+    'rg --ignore-file=auth/p/t.json x /tmp/y', 'rg --ignore-file auth/p/t.json x /tmp/y', 'grep -r --exclude-from=auth/p/t.json x /tmp', 'grep -f auth/p/t.json /tmp/input.txt', 'grep -fauth/p/t.json /tmp/input.txt',
+    'ag -p auth/p/t.json x /tmp', 'sed --file=auth/p/t.json x', 'tar --file=auth/p/t.json -t', 'cat --foo=auth/p/t.json', 'cp --target-directory=auth /tmp/x',
+    `rg --file=${home}/.local/state/fe-kit/auth/p/t.json x /tmp`, 'rg --file=$HOME/.local/state/fe-kit/auth/p/t.json x /tmp',
+  ]
+  for (const command of denied) assert.equal(decide(command, state), 'deny', command)
+  for (const command of ['rg --file=patterns.txt /tmp/input.txt', 'rg -fpatterns.txt /tmp/input.txt', 'rg --ignore-file=.ignore x /tmp/y', 'sed --file=script.sed x', 'tar --file=out.tar -t']) assert.equal(decide(command, state), 'allow', command)
+})
+
+test('what filters a search, and what grep reads without -r, are not folders', async (t) => {
+  const { home, at } = await setup(t)
+  const fromHome = at(home)
+  const config = at(join(home, '.config'))
+  for (const command of [
+    'grep . Code/fe-kit/README.md', 'grep -n TOKEN Code/fe-kit/README.md', 'egrep . Code/x', 'fgrep . Code/x', 'grep -e . Code/x', "rg -g '**/*.mjs' TOKEN Code/fe-kit", 'rg -g **/*.mjs TOKEN Code/fe-kit', "grep -r --include='**/*.js' TOKEN Code",
+    'grep -r --include **/*.js TOKEN Code', 'grep -r --include=**/*.js TOKEN Code', 'rg --glob=**/*.mjs TOKEN Code', 'rg -g**/*.mjs TOKEN Code', 'rg -g**/*.mjs -i TOKEN Code', 'rg --iglob **/*.mjs TOKEN Code', 'rg -t js TOKEN Code', "rg -r '$1' TOKEN Code", "rg -g '!x' TOKEN Code", 'rg --type-add web:*.html -t web TOKEN Code',
+  ]) assert.equal(decide(command, fromHome), 'allow', command)
+  for (const command of ['rg -e TOKEN -g*.json .config', 'grep -r -e TOKEN -A2 .config', 'rg -e TOKEN --glob=*.json .config']) assert.equal(decide(command, fromHome), 'deny', `${command}: an attached value does not use up the folder after it`)
+  assert.equal(decide('grep . .config/fe-kit/env', fromHome), 'deny', 'grep without -r still reads the file it is given')
+  assert.equal(decide('grep -r . .config', fromHome), 'deny')
+  assert.equal(decide("rg -g '*.json' TOKEN .config", fromHome), 'deny')
+  assert.equal(decide("rg -g '*.json' TOKEN", config), 'deny')
+  assert.equal(decide('rg -g **/*.json TOKEN', config), 'deny')
+  assert.equal(decide('grep TOKEN', config), 'allow', 'without -r it reads its input')
+  assert.equal(decide('grep TOKEN env', at(join(home, '.config/fe-kit'))), 'deny')
+})

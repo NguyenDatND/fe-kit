@@ -119,3 +119,15 @@ Lượt 2 (r19, Codex kiểm 5f436eb; báo cáo `spike/review/r19-findings.md`):
 
 Đột biến: 17 phép phá cho phần mới, 2 sống (`--regexp` và `--file` của lệnh dài) → thêm test → chết hết. Toàn bộ: 1069 test xanh, lint sạch, `validate` 0 vấn đề.
 
+Lượt 3 (r20, lượt cuối của chủ đề này, Codex kiểm f87bf1d; báo cáo `spike/review/r20-findings.md`): xác nhận điểm 1 và 3 của r19 đã đủ; 3 điểm còn lại, `VERDICT: CHANGES_REQUIRED`. Hết 3 lượt nên tôi sửa theo bằng chứng (chạy thử trên mã) và không xin lượt thứ 4.
+
+| # | Mức | Điểm | Sửa |
+|---|---|---|---|
+| 1 | MAJOR | `rg --file=auth/p/t.json x` và `rg -fauth/p/t.json x` đọc kho phiên mà được allow (tái hiện) | mọi lệnh: giá trị gắn `=` của option dài là một tên riêng, kiểm như đường dẫn; `searchShape`: `-f`/`-p` gắn liền cho ra `files` để kiểm |
+| 2 | MAJOR | `grep . file` (không `-r`) bị deny nhầm vì pattern bị coi là thư mục (tái hiện); giá trị bộ lọc (`-g`, `--include`...) bị coi là đường dẫn (với dấu nháy thì thực ra không tái hiện được) | `grep` không `-r` vẫn được phân loại nhưng không đệ quy; giá trị option lọc thì bỏ khỏi danh sách thư mục, chỉ `-f`/`--file`/`--ignore-file`/`--exclude-from`... vẫn là đường dẫn |
+| 3 | MINOR | `recover` ghi `mode` theo ý định của journal dù skill chưa chuyển (tái hiện bằng test dừng trước skill đầu và giữa chừng) | journal ghi `target` từng skill; `mode` chỉ được chốt khi mọi skill của tool đã đúng mode đó (đọc thực tế: symlink hay không); thêm seam `deps.beforeSkill` |
+
+Đột biến: 17 phép phá, 4 sống lúc đầu (2 tương đương mã thừa đã bỏ: `tilde: false` và kiểm marker của bản sao; 1 thêm test; 1 thêm test) → hết sống. Toàn bộ: 1072 test xanh, lint sạch.
+
+Còn lại, nói thẳng: bảng option của `rg`/`grep`/`ag`/`ack` là heuristic, không phải bộ phân tích đầy đủ; option lạ chỉ làm tăng số lần hỏi, và chỉ trong thư mục chứa kho bí mật. Đây thuộc "giới hạn đã biết" của guard.
+
