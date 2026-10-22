@@ -95,5 +95,5 @@ Sau lượt 15 tôi không gửi thêm lượt thứ tư (đã hết 3 lượt c
 - Bộ lọc bí mật không hoàn hảo: bí mật kit không biết, ở dạng không nhận ra, vẫn có thể lọt.
 - Khoá của `dev` là khoá bằng file (Node không có khoá hệ điều hành): ba lệnh cùng một khoảnh khắc vẫn có thể thắng nhau; xem điểm MINOR lượt 15.
 - Trang cần WebSocket sẽ trông hỏng trên đích chỉ đọc (Vite HMR báo lỗi kết nối).
-- `ui-act` chưa bật; `auth login` tương tác chỉ kiểm bằng trình duyệt giả, bạn nên thử một lần thật.
+- `ui-act` đã bật ở Phase 1b bằng xác nhận `yes` trên `/dev/tty` (không dựa vào `shell-guard`); chưa thử bằng tay trong terminal thật. `auth login` tương tác chỉ kiểm bằng trình duyệt giả, bạn nên thử một lần thật.
 

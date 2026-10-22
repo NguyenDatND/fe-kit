@@ -34,7 +34,8 @@ Trạng thái: **kế hoạch đã duyệt (2026-10-21); đã xong P1B-1a, 1b, 2
 - [x] P1B-5 `doctor`: 22 test, 41 + 18 đột biến đã xử lý (còn lại tương đương: không); 1040 test xanh.
 - [x] P1B-6 skill `fe-kit` (router) và `fe-setup`, trang `docs/skills/`; `fe-kit context` thêm `profilesDir` và `remotes` để `fe-setup` không phải đoán. `validate` 5 skill, 0 vấn đề.
 - [x] P1B-7 README, `docs/plan.md` (§5.3 `link`, `doctor`).
-- [ ] P1B-8 nghiệm thu, P1B-9 `ui-act` bằng `/dev/tty`: chưa làm.
+- [x] P1B-9 `ui-act` bật bằng xác nhận `yes` trên `/dev/tty` (`ui-act-gate.mjs`: `confirmOnTerminal`, `confirmUiAct`), runner giữ thêm khoá; 11 test, 15 đột biến đã xử lý. Chưa thử tay trong terminal thật (việc của bạn: một lần).
+- [ ] P1B-8 nghiệm thu trên tool thật: chưa làm.
 
 **Lệch kế hoạch ở P1B-4:** `--with rules` bị từ chối ("chưa có") thay vì có code ẩn sau cờ; tool chưa có thư mục thì bỏ qua trừ khi gọi `--tools`; xung đột khi hồi phục nhật ký chỉ là *ghi chú* (không chặn), vì file không khớp "trước" lẫn "sau" nghĩa là kit không ghi nó (rename nguyên tử) hoặc người dùng sửa sau đó, cả hai đều không làm kit gỡ nhầm.
 

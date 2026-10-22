@@ -18,7 +18,7 @@ Phase 0 (spike) xong phần headless; Phase 1 xong phần không phụ thuộc G
 | `fe-kit auth` | Lưu phiên đăng nhập cho một vai (bạn đăng nhập một lần trong cửa sổ trình duyệt) và kiểm nó | có |
 | `fe-kit ui` | Xem đích trong Chromium thật: ảnh nhiều viewport, lỗi console, request lỗi, kịch bản bước; đích dùng chung chỉ đọc | có |
 | `fe-kit dev` | Chạy, dừng, kiểm dev server của đích ở nền | có |
-| `fe-kit ui-act` | Như `ui` nhưng cho một request ghi đi qua | chưa bật (cần `shell-guard`) |
+| `fe-kit ui-act` | Như `ui` nhưng cho đúng một request ghi đi qua, sau khi bạn gõ `yes` trên terminal của bạn | có |
 | `fe-kit link` / `unlink` | Cài skill và `shell-guard` vào Claude Code, Codex, Antigravity (mặc định chỉ in việc sẽ làm; `--yes` mới ghi); `unlink` gỡ đúng phần đã thêm | có (chưa cài thật vào máy bạn) |
 | `fe-kit doctor` | Kiểm node, playwright, phần `link` đã cài (còn đủ không), hook guard chạy thật, phiên đăng nhập, bí mật trong file cấu hình, hồ sơ dự án, phiên bản tool; việc chờ bạn ghi là `pending` | có |
 | `mr`, `secrets`… | | chưa làm |

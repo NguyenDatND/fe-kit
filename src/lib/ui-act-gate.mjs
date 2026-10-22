@@ -1,13 +1,62 @@
+import { open } from 'node:fs/promises'
+import { createInterface } from 'node:readline'
 import { UsageError } from './errors.mjs'
 
 /**
  * `ui-act` lets one write request through on a read-only target. What makes that safe is a person seeing the request before it
- * is sent, and that comes from `shell-guard`, which does not exist yet. Until it does, no way of calling the kit lets a write
- * through: the command and the runner both refuse, and a caller can open the gate only by saying so itself (`deps.uiActGate`),
- * which nothing in the kit does. A script that drives Playwright on its own is outside what the kit can stop.
+ * is sent. The person types `yes` at the terminal (`/dev/tty`), which a program that was started by a tool, with no terminal of
+ * its own, cannot do for them: there the command stops and says to run it in a terminal. It is not proof against an agent that
+ * builds a terminal of its own, or one that drives Playwright by itself; that is outside what the kit can stop.
+ * The runner holds a second lock (`assertUiActEnabled`) so that no other way of calling it lets a write through unasked.
  */
+
+const ANSWER_WAIT_MS = 120_000
+
 export function assertUiActEnabled(deps) {
   if (deps?.uiActGate?.() !== true) {
-    throw new UsageError('ui-act is not enabled yet: it lets a write request through on a read-only target, which needs shell-guard to show you the request first (see docs/plan.md, Phase 1)')
+    throw new UsageError('ui-act cannot run without a person confirming the request at a terminal: use the fe-kit ui-act command')
   }
+}
+
+/** The terminal of the person at the keyboard, or null when this process has none (a tool's shell has not). */
+async function openTty() {
+  try {
+    const handle = await open('/dev/tty', 'r+')
+    return { input: handle.createReadStream({ autoClose: false }), output: handle.createWriteStream({ autoClose: false }), close: () => handle.close() }
+  } catch {
+    return null
+  }
+}
+
+/** Shows `message` and reads one line: true for exactly `yes`, false for anything else or no answer in time, null with no terminal. */
+export async function confirmOnTerminal(message, { openTerminal = openTty, timeoutMs = ANSWER_WAIT_MS } = {}) {
+  const terminal = await openTerminal()
+  if (terminal === null) return null
+  const lines = createInterface({ input: terminal.input })
+  let timer
+  try {
+    return await new Promise((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs)
+      lines.once('line', (line) => resolve(line.trim() === 'yes'))
+      lines.once('close', () => resolve(false))
+      terminal.output.write(`${message}\n> `)
+    })
+  } finally {
+    clearTimeout(timer)
+    lines.close()
+    await terminal.close()
+  }
+}
+
+/** Asks the person; resolves when they said yes, otherwise throws a usage error that says why. `deps.confirm` is a seam for tests. */
+export async function confirmUiAct({ request, target, role, deps }) {
+  const message = [
+    'fe-kit ui-act wants to let ONE write request through on a read-only target:',
+    `  ${request}`,
+    `  target: ${target}${role === undefined ? '' : `, role: ${role}`}`,
+    'This can change data on that server. Type yes to allow it; anything else refuses.',
+  ].join('\n')
+  const answer = await (deps?.confirm ?? confirmOnTerminal)(message)
+  if (answer === null) throw new UsageError('ui-act needs a person at a terminal to confirm the request, and there is none here: run the command yourself in a terminal')
+  if (answer !== true) throw new UsageError('ui-act was not confirmed: nothing was sent')
 }

@@ -24,7 +24,7 @@ Commands:
   auth       save a login for a role (you log in once, in a browser window) and check it
   ui         look at the target in a browser: pictures, console errors, failed requests, steps
   dev        start, stop and check the dev server of a target, in the background
-  ui-act     like ui, but lets one write request through (not enabled yet: it needs shell-guard)
+  ui-act     like ui, but lets one write request through, after you type yes at the terminal
   link       put the skills and shell-guard into Claude Code, Codex and Antigravity (dry run unless --yes)
   unlink     take out exactly what link added
   doctor     check the kit, what link installed, the guard hook, saved logins, secrets in config files
