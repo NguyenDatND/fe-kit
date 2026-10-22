@@ -542,3 +542,13 @@ test('what an interrupted run made is written into the record when the next comm
   assert.deepEqual(Object.keys(recorded.tools).sort(), ['antigravity', 'codex'])
   for (const tool of ['codex', 'antigravity']) assert.deepEqual(recorded.tools[tool].skills, SKILLS, tool)
 })
+
+test('a switch from links to copies that stops before the record is written is recorded as copies by the run that finishes it', async (t) => {
+  const { state, link: run } = await setup(t)
+  await run({ yes: true })
+  assert.equal((await readJson(join(state, 'install.json'))).tools.claude.mode, 'symlink')
+  await run({ yes: true, copy: true }, { beforeRecord: () => { throw new Error('killed') } }).catch(() => {})
+  const next = await run({ yes: true, copy: true })
+  assert.equal(next.exitCode, 0, next.text)
+  for (const tool of ['claude', 'codex', 'antigravity']) assert.equal((await readJson(join(state, 'install.json'))).tools[tool].mode, 'copy', tool)
+})

@@ -104,4 +104,6 @@ Ghi sau mỗi lần bị sửa (người dùng hoặc reviewer): mẫu lỗi và
 69. **Journal phải ghi MỌI thay đổi của giao dịch, không chỉ loại thay đổi dễ nghĩ tới** (skill, không chỉ file cấu hình).
 70. **Bao `{exitCode, stdout}` hợp lệ chưa đủ: stdout còn phải là thứ tool đọc được**, vì Claude/Codex cho lệnh chạy khi hook in ra thứ không đọc được. Và một hàm kiểm chạy trong handler không được ném lỗi.
 71. **Luồng đọc từ file handle chờ lần đọc đang chạy khi đóng:** với `/dev/tty` không ai gõ, lần đọc không bao giờ xong. Dùng `tty.ReadStream` rồi `destroy()`; chỉ test được bằng pty thật (`script`), PassThrough giả không tái hiện.
+72. **Bộ đếm "đã có đường dẫn chưa" phải phân loại từng từ (pattern, giá trị option, đường dẫn), không đếm gộp**; option chưa biết thì hỏi người, đừng đoán theo hướng cho qua.
+73. **`tty.ReadStream` mở lại terminal cho riêng nó và giữ một descriptor sau `destroy()` (đo bằng `/dev/fd` trong pty thật):** chỉ đóng được phần của mình; đo trước khi tin lời "đã đóng".
 

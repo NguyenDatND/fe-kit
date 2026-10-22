@@ -108,3 +108,14 @@ Báo cáo: `spike/review/r18-findings.md`. 7 điểm MAJOR, không có BLOCKER; 
 
 Chỗ tôi không theo Codex: điểm 3 Codex nói "không coi pattern là toán hạng đường dẫn"; tôi đếm toán hạng (có bảng các option nhận giá trị) nên `rg -g '*.js' TOKEN` vẫn bị bắt; `rg` đọc từ pipe khi không có đường dẫn cũng bị bắt trong cwd chứa kho (từ chối nhầm hiếm, chấp nhận).
 
+Lượt 2 (r19, Codex kiểm 5f436eb; báo cáo `spike/review/r19-findings.md`): xác nhận 6 trên 7 điểm của r18 đã sửa đủ, **điểm 3 chưa đủ**; thêm 2 điểm MINOR. 4 điểm, đều tái hiện hoặc đo được trước khi sửa; `VERDICT: CHANGES_REQUIRED`.
+
+| # | Mức | Điểm | Sửa |
+|---|---|---|---|
+| 1 | MAJOR | `rg --max-filesize 1M TOKEN` từ `~/.config`: option nhận giá trị chưa có trong bảng làm đếm lệch, bỏ kiểm cwd | `searchShape`: bảng option theo chương trình (chữ cái nhận giá trị, cờ, option dài có/không giá trị); option lạ thì `ask`, không đoán |
+| 2 | MAJOR | `rg --files Code/fe-kit` từ HOME bị deny nhầm; `rg '.' file` bị deny vì pattern `.` bị giải thành đường dẫn | `--files` và `-e` không có pattern; từ pattern không bị coi là thư mục (vẫn bị chặn nếu là chữ chỉ tên kho); `--help/--version/--type-list` không tìm gì |
+| 3 | MINOR | `openTty` để lọt descriptor gốc | đóng cả hai descriptor của mình; phần `tty.ReadStream` tự giữ (đo: 1 mỗi lần hỏi, sau `destroy()`) không đóng được, `ui-act` chỉ hỏi một lần mỗi tiến trình; test pty đo ≤ 1 mỗi lần hỏi |
+| 4 | MINOR | phục hồi giữ `mode` cũ khi dừng giữa lúc đổi symlink → copy | `recover` lấy `mode` của journal; test chuyển symlink → copy rồi dừng trước ghi record |
+
+Đột biến: 17 phép phá cho phần mới, 2 sống (`--regexp` và `--file` của lệnh dài) → thêm test → chết hết. Toàn bộ: 1069 test xanh, lint sạch, `validate` 0 vấn đề.
+

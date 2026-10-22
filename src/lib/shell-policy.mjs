@@ -297,39 +297,86 @@ function nodeReason(args) {
   return null
 }
 
-// What takes its pattern from an option and so has one word less to give (`rg -e x`), and the options that are followed by a value of their own.
-const PATTERN_OPTIONS = ['-e', '-f', '--regexp', '--file']
-const OPTIONS_WITH_VALUE = [
-  ...PATTERN_OPTIONS, '-g', '--glob', '--iglob', '-t', '-T', '--type', '--type-not', '-A', '-B', '-C', '--after-context', '--before-context', '--context', '-m', '--max-count', '-j', '--threads', '-M', '--max-columns', '--max-depth', '-d',
-  '--directories', '-D', '--devices', '--include', '--exclude', '--exclude-dir', '--include-dir', '--label', '-r', '--replace', '-E', '--engine', '--sort', '--sortr', '--pre', '--pre-glob', '--colors', '--path-separator', '--ignore-file', '--encoding',
-]
-const RG_ONLY_VALUES = ['-r', '-E'] // `grep -r` recurses and `grep -E` is the extended syntax; for rg they take a value
+// How the programs that search below a folder are called. Each one: the short options that take a value (`rg -g '*.js'`), and
+// below, the short flags, the long options that take a value and the long flags that all of them share. A word that is none of
+// these may or may not take the next word as its value, and the person is asked about it instead of the guard guessing.
+const SEARCH_VALUE_LETTERS = { rg: 'efgtTABCEjMmrd', grep: 'efmABCdD', egrep: 'efmABCdD', fgrep: 'efmABCdD', ag: 'ABCGgmp', ack: 'ABCmgG' }
+const SEARCH_FLAG_LETTERS = 'iIsSFwvnNlLcqHhoUuaxPzZVbrRkKTpyE0123456789'
+const SEARCH_LONG_VALUES = new Set([
+  '--regexp', '--file', '--glob', '--iglob', '--type', '--type-not', '--type-add', '--type-clear', '--after-context', '--before-context', '--context', '--max-count', '--max-depth', '--maxdepth', '--max-filesize', '--max-columns', '--threads',
+  '--directories', '--devices', '--include', '--exclude', '--exclude-dir', '--exclude-from', '--include-dir', '--label', '--replace', '--engine', '--sort', '--sortr', '--pre', '--pre-glob', '--colors', '--color', '--path-separator', '--ignore-file',
+  '--encoding', '--binary-files', '--group-separator', '--context-separator', '--field-context-separator', '--field-match-separator', '--dfa-size-limit', '--regex-size-limit', '--hostname-bin', '--hyperlink-format', '--generate', '--depth',
+  '--workers', '--pager', '--file-search-regex', '--ignore', '--path-to-ignore',
+])
+const SEARCH_LONG_FLAGS = new Set([
+  '--files', '--hidden', '--no-ignore', '--no-ignore-vcs', '--no-ignore-dot', '--no-ignore-global', '--no-ignore-parent', '--no-ignore-files', '--no-require-git', '--follow', '--count', '--count-matches', '--ignore-case', '--smart-case', '--case-sensitive',
+  '--fixed-strings', '--word-regexp', '--line-regexp', '--line-number', '--no-line-number', '--heading', '--no-heading', '--with-filename', '--no-filename', '--files-with-matches', '--files-without-match', '--invert-match', '--json', '--vimgrep',
+  '--column', '--no-messages', '--text', '--multiline', '--multiline-dotall', '--stats', '--null', '--null-data', '--quiet', '--silent', '--only-matching', '--pretty', '--unrestricted', '--trim', '--binary', '--no-config', '--debug', '--trace',
+  '--glob-case-insensitive', '--one-file-system', '--sort-files', '--pcre2', '--crlf', '--mmap', '--no-mmap', '--block-buffered', '--line-buffered', '--passthru', '--search-zip', '--no-unicode', '--recursive', '--dereference-recursive',
+  '--extended-regexp', '--basic-regexp', '--perl-regexp', '--initial-tab', '--byte-offset', '--no-ignore-case', '--color', '--colour', '--literal', '--all-text', '--skip-vcs-ignores', '--numbers', '--nonumbers', '--word', '--invert',
+])
+const SEARCH_NO_PATTERN = new Set(['--files', '--type-list', '--version', '--help', '--pcre2-version', '--generate', '-V'])
+const SEARCH_NO_SEARCH = new Set(['--type-list', '--version', '--help', '--pcre2-version', '--generate', '-V'])
+const PATTERN_LETTERS = 'ef' // the pattern comes from an option: the next word is it (-e) or a file of them (-f)
+const PATTERN_LONG = ['--regexp', '--file']
+const RG_ONLY_VALUES = ['--color'] // `grep --color` takes its value attached; for rg it is the next word
 const GREPS = new Set(['grep', 'egrep', 'fgrep'])
 const FIND_EXPRESSION_START = /^(-|!$|\(|\)$)/
 
 /**
- * Whether a recursive search is given no folder, so that it searches the one it runs in. `rg`, `ag` and `ack` do that
- * with no path; `grep` only with -r; `find` when its first word is already part of the expression.
+ * What a program that searches below a folder is given: `patterns` (the words that are the pattern, not folders), whether it
+ * `searches` the folder it runs in for certain (given no folder) or `maybe` (given an option it does not know, which could
+ * have used up the one word that looks like a folder). Null for a program that is not one of these, or a call that searches nothing.
  */
-function searchesWorkingFolder(name, args) {
-  if (name === 'find') return args.length === 0 || FIND_EXPRESSION_START.test(args[0].text)
-  if (GREPS.has(name) && !args.some((word) => /^-[A-Za-z]*[rR]/.test(word.text) || /^--(dereference-)?recursive$/.test(word.text))) return false
-  if (!GREPS.has(name) && !['rg', 'ag', 'ack'].includes(name)) return false
-  let positional = 0
+function searchShape(name, args) {
+  if (name === 'find') return { patterns: [], searches: args.length === 0 || FIND_EXPRESSION_START.test(args[0].text), maybe: false }
+  const letters = SEARCH_VALUE_LETTERS[name]
+  if (letters === undefined) return null
+  if (GREPS.has(name) && !args.some((word) => /^-[A-Za-z]*[rR]/.test(word.text) || /^--(dereference-)?recursive$/.test(word.text))) return null // without -r it reads its input
+  const operands = []
+  const patterns = [] // the words that are the pattern, taken from -e
   let patternFromOption = false
+  let withoutPattern = false
+  let unknown = 0
   for (let index = 0; index < args.length; index++) {
     const text = args[index].text
     if (text === '--') {
-      positional += args.length - index - 1
+      operands.push(...args.slice(index + 1))
       break
     }
-    if (!text.startsWith('-') || text === '-') positional++
-    else if (OPTIONS_WITH_VALUE.includes(text) && (name === 'rg' || !RG_ONLY_VALUES.includes(text))) {
-      patternFromOption ||= PATTERN_OPTIONS.includes(text)
-      index++
-    } else if (/^--?(regexp|file)=|^-[ef]./.test(text)) patternFromOption = true
+    if (SEARCH_NO_SEARCH.has(text)) return null
+    if (!text.startsWith('-') || text === '-') operands.push(args[index])
+    else if (text.startsWith('--')) {
+      const [option, attached] = [text.split('=')[0], text.includes('=')]
+      if (SEARCH_NO_PATTERN.has(option)) withoutPattern = true
+      if (PATTERN_LONG.includes(option)) patternFromOption = true
+      if (SEARCH_LONG_VALUES.has(option) && !(name !== 'rg' && RG_ONLY_VALUES.includes(option))) {
+        if (!attached) {
+          if (option === '--regexp') patterns.push(args[index + 1])
+          index++
+        }
+      } else if (!SEARCH_LONG_FLAGS.has(option) && !attached) unknown++
+    } else {
+      for (let at = 1; at < text.length; at++) {
+        const letter = text[at]
+        if (letters.includes(letter)) {
+          if (PATTERN_LETTERS.includes(letter)) patternFromOption = true
+          if (at === text.length - 1) {
+            if (letter === 'e') patterns.push(args[index + 1])
+            index++ // the value is the next word; otherwise it is attached
+          }
+          break
+        }
+        if (!SEARCH_FLAG_LETTERS.includes(letter)) {
+          unknown++
+          break
+        }
+      }
+    }
   }
-  return positional <= (patternFromOption ? 0 : 1)
+  const patternCount = patternFromOption || withoutPattern ? 0 : 1
+  const folders = operands.length - patternCount
+  return { patterns: [...patterns, ...operands.slice(0, patternCount)].filter((word) => word !== undefined), searches: folders <= 0, maybe: folders > 0 && folders - unknown <= 0 }
 }
 
 function inspectStore(command, launch, ctx, findings) {
@@ -340,14 +387,21 @@ function inspectStore(command, launch, ctx, findings) {
   for (const { target } of command.redirects) if (wordHitsStore(target, command.cwds, false, ctx)) found() // a redirection reads or writes the file whatever the command is
   if (command.words.length === 0 || (name !== null && EXEMPT.has(name))) return
   const recursive = name !== null && RECURSIVE.has(name)
+  const shape = recursive ? searchShape(name, launch.args) : null
   if (command.cwds.some((cwd) => cwd !== null && touchesStore(cwd, ctx))) found()
   for (const [index, word] of command.words.entries()) {
     if (index === 0 && !word.text.includes('/')) continue // a program found on the PATH is not a file in this folder
+    if (shape?.patterns.includes(word)) {
+      if (namesStore(word.text, ctx)) found() // what it looks for is not a folder, but a name that is a store is refused
+      continue
+    }
     if (wordHitsStore(word, command.cwds, recursive, ctx)) found()
   }
-  if (recursive && searchesWorkingFolder(name, launch.args)) {
-    if (command.cwds.some((cwd) => cwd !== null && containsStore(cwd, ctx))) found()
-    else if (command.cwds.includes(null)) findings.push(ask(`${name} searches the folder it runs in, and that is not known (after a cd that could not be followed)`))
+  if (shape !== null && (shape.searches || shape.maybe)) {
+    if (command.cwds.some((cwd) => cwd !== null && containsStore(cwd, ctx))) {
+      if (shape.searches) found()
+      else findings.push(ask(`${name} is given an option that is not known, so it may search the folder it runs in, which holds the folders of fe-kit's secrets`))
+    } else if (command.cwds.includes(null)) findings.push(ask(`${name} searches the folder it runs in, and that is not known (after a cd that could not be followed)`))
   }
   // A relative name read after a `cd` that cannot be followed may be anywhere, the store included.
   if (name !== null && READERS.has(name) && command.cwds.includes(null)) {

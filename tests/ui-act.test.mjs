@@ -220,11 +220,11 @@ describe('the runner holds the gate itself, and with the gate open the one permi
   })
 })
 
-/** Runs the question in a program that has a terminal of its own, which `typed` is shell text that writes to; resolves what it printed, or null when it did not end in time. */
-async function askOnTerminal(t, typed, timeoutMs = 500) {
+/** Runs `body` (module code, given `confirmOnTerminal`) in a program that has a terminal of its own, which `typed` is shell text that writes to; resolves what it printed up to its end, or null when it did not end in time. */
+async function onTerminal(t, typed, body) {
   const { spawn } = await import('node:child_process')
   const gate = fileURLToPath(new URL('../src/lib/ui-act-gate.mjs', import.meta.url))
-  const code = `import { confirmOnTerminal } from ${JSON.stringify(gate)}; process.on('exit', () => console.log('ended')); console.log('result:' + (await confirmOnTerminal('q', { timeoutMs: ${timeoutMs} })))`
+  const code = `import { confirmOnTerminal } from ${JSON.stringify(gate)}; process.on('exit', () => console.log('ended')); ${body}`
   // `script` gives the program a terminal of its own, and needs a real pipe for its input.
   const child = spawn('sh', ['-c', `(${typed}) | script -q /dev/null "$0" --input-type=module -e "$1"`, process.execPath, code], { stdio: ['ignore', 'pipe', 'ignore'], detached: true })
   t.after(() => process.kill(-child.pid, 'SIGKILL'))
@@ -238,6 +238,8 @@ async function askOnTerminal(t, typed, timeoutMs = 500) {
   })
 }
 
+const askOnTerminal = (t, typed, timeoutMs = 500) => onTerminal(t, typed, `console.log('result:' + (await confirmOnTerminal('q', { timeoutMs: ${timeoutMs} })))`)
+
 const terminalTest = { skip: process.platform !== 'darwin' }
 
 test('on a real terminal nobody types on, the question ends at the time limit and the process can end', terminalTest, async (t) => {
@@ -250,4 +252,16 @@ test('on a real terminal, yes allows and anything else does not', terminalTest, 
   assert.match(await askOnTerminal(t, 'sleep 1; echo yes; sleep 20', 5000), /result:true/)
   assert.match(await askOnTerminal(t, 'sleep 1; echo y; sleep 20', 5000), /result:false/)
   assert.match(await askOnTerminal(t, 'sleep 1; echo nope; sleep 20', 5000), /result:false/)
+})
+
+test('each question on a real terminal leaves at most one descriptor open (the stream keeps its own; ours are closed)', terminalTest, async (t) => {
+  const body = `const { readdirSync } = await import('node:fs')
+    const count = () => readdirSync('/dev/fd').length
+    for (let i = 0; i < 2; i++) await confirmOnTerminal('q', { timeoutMs: 30 })
+    const before = count()
+    for (let i = 0; i < 10; i++) await confirmOnTerminal('q', { timeoutMs: 30 })
+    console.log('grown:' + (count() - before))`
+  const output = await onTerminal(t, 'sleep 20', body)
+  assert.notEqual(output, null, 'the process did not end')
+  assert.ok(Number(/grown:(\d+)/.exec(output)?.[1]) <= 10, output)
 })

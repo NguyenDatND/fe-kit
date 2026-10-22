@@ -27,12 +27,24 @@ export function assertUiActEnabled(deps) {
 function openTty() {
   let input
   let output
+  const release = () => {
+    for (const fd of [input, output]) {
+      try {
+        if (fd !== undefined) closeSync(fd)
+      } catch {
+        // already closed
+      }
+    }
+  }
   try {
     input = openSync('/dev/tty', 'r')
     output = openSync('/dev/tty', 'w')
-    return { input: new ReadStream(input), output: { write: (text) => writeSync(output, text) }, close: () => { closeSync(output) } }
+    // The stream opens the terminal again for itself and leaves the descriptor it was given open, so both of ours are closed
+    // with it. The stream keeps one of its own after destroy (measured: one per question, nothing at the end of a process
+    // that asks once, as ui-act does).
+    return { input: new ReadStream(input), output: { write: (text) => writeSync(output, text) }, close: release }
   } catch {
-    for (const fd of [input, output]) if (fd !== undefined) closeSync(fd)
+    release()
     return null
   }
 }

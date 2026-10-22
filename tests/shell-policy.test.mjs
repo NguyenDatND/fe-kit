@@ -317,3 +317,37 @@ test('a search with no folder given, in a folder that is not known, is asked abo
   for (const command of ['cd $dir; find', 'cd $dir; find -type f', 'cd $dir; rg', 'cd $dir; grep -r', 'cd $dir; grep -r -i']) assert.equal(decide(command, context), 'ask', `${command}: no name in it to tell the folder is read`)
   assert.equal(decide('cd $dir; rg TOKEN src', context), 'ask') // a name relative to an unknown folder, as before
 })
+
+test('a search is told apart from its pattern, its options and the folders it is given', async (t) => {
+  const { home, at } = await setup(t)
+  const config = at(join(home, '.config'))
+  const fromHome = at(home)
+
+  // options that take a value, whatever their length, do not count as folders
+  for (const command of ['rg --max-filesize 1M TOKEN', 'rg --max-depth 3 --threads 2 TOKEN', 'rg -ie TOKEN', 'rg -uuu TOKEN', 'rg -in TOKEN', 'grep -rIn TOKEN', 'grep -r --exclude-dir node_modules TOKEN', 'grep -r --exclude-dir=node_modules TOKEN', 'grep -r --binary-files=text TOKEN', 'grep -r -A 2 TOKEN', 'rg --color never TOKEN', 'rg --files', 'rg --files --hidden', 'rg -r X TOKEN']) {
+    assert.equal(decide(command, config), 'deny', command)
+  }
+  // grep's -r, -E and --color are not options with a value, so what follows them is the pattern and the folder
+  for (const command of ['grep -rE TOKEN project', 'grep -r -E TOKEN project', 'grep --color TOKEN project -r', 'grep -rn --include "*.ts" TOKEN project', 'rg -i TOKEN project', "rg -g '*.js' -i TOKEN project", 'rg --max-filesize 1M TOKEN project', 'rg -r X TOKEN project']) {
+    assert.equal(decide(command, config), 'allow', command)
+  }
+  // an option the guard does not know may or may not take a value: the person is asked
+  for (const command of ['rg --some-new-flag x TOKEN', 'rg --some-new-flag TOKEN project', 'grep -r --some-new-flag TOKEN project', 'rg -Y TOKEN project']) assert.equal(decide(command, config), 'ask', command)
+  assert.equal(decide('rg --some-new-flag=1 TOKEN project', config), 'allow', 'a value that is attached is not one more word')
+  assert.equal(decide('rg --some-new-flag=1 TOKEN', config), 'deny')
+
+  // what is not a search of a folder
+  for (const command of ['rg --help', 'rg --version', 'rg -V', 'rg --type-list', 'grep -r --help']) assert.equal(decide(command, fromHome), 'allow', command)
+  // `--files` has no pattern: every word is a folder
+  for (const command of ['rg --files Code/fe-kit', 'rg --files project', 'rg --hidden --files Code']) assert.equal(decide(command, fromHome), 'allow', command)
+  assert.equal(decide('rg --files .config', fromHome), 'deny')
+  assert.equal(decide('rg --files', fromHome), 'deny')
+  // a pattern given by an option leaves every word after it for the folders
+  for (const command of ['rg --regexp TOKEN project', 'rg --file patterns.txt project', 'rg -f patterns.txt project', 'grep -r --regexp TOKEN project', 'grep -r --regexp=TOKEN project']) assert.equal(decide(command, config), 'allow', command)
+  assert.equal(decide('rg --regexp . Code', fromHome), 'allow')
+  assert.equal(decide('rg --regexp TOKEN', config), 'deny')
+  // a pattern is not a folder, whatever it looks like
+  for (const command of ['rg . Code/fe-kit/README.md', 'rg .. Code', 'rg "~" Code', 'grep -r . Code', 'rg -e . Code']) assert.equal(decide(command, fromHome), 'allow', command)
+  assert.equal(decide('rg . .config', fromHome), 'deny', 'the folder after the pattern still counts')
+  assert.equal(decide('rg .config/fe-kit', at(join(home, 'project'))), 'deny', 'a pattern that names a store is still refused as text')
+})

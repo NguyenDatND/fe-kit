@@ -198,7 +198,7 @@ export async function recover(stateDir) {
   // A run that stopped after making skills and before it wrote the record: the skills are the kit's, whatever became of the files.
   for (const skill of journal.op === 'link' ? journal.skills ?? [] : []) {
     const known = state.tools[skill.tool] ?? { mode: skill.mode, skills: [], files: [] }
-    state.tools[skill.tool] = { ...known, skills: [...new Set([...known.skills, skill.name])] }
+    state.tools[skill.tool] = { ...known, mode: skill.mode, skills: [...new Set([...known.skills, skill.name])] } // the mode of the latest run: what it left is what the record must describe
   }
   for (const item of journal.items) {
     const current = await readTextIfExists(item.file).catch(() => undefined)
