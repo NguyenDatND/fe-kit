@@ -7,10 +7,13 @@
 
 - Phase 3 (xem UI thật), phần lõi: `fe-kit auth | dev | ui`, chính sách request GraphQL-aware, bộ chặn ghi trên đích chỉ đọc (đo trên Chromium thật), skill `fe-ui-check`, nghiệm thu headless trên sandbox (`docs/acceptance/phase-3.md`). Review Codex: kế hoạch 2 lượt, code 3 lượt (`tasks/phase-3.md`). `ui-act` có cơ chế và test nhưng **chưa bật** (cần `shell-guard`).
 
+- Phase 1b (`tasks/phase-1b.md`), phần code: `shell-guard` (bộ tách lệnh, chính sách `allow`/`ask`/`deny`, hook có bộ giám sát fail-closed), `fe-kit link | unlink | doctor` (chỉ thêm vào cuối cấu hình của bạn, backup, khoá, nhật ký giao dịch), skill `fe-kit` và `fe-setup`. Review kế hoạch: Codex 2 lượt (7 + 5 điểm). **Chưa cài thật vào máy bạn.** Còn lại: nghiệm thu trên tool thật (P1B-8) và bật `ui-act` bằng xác nhận trên `/dev/tty` (P1B-9).
+
 **Chờ bạn:**
 - S-1: thu hồi khoá Figma đã lộ.
 - Kiểm tay GUI và quyết định S14 (`docs/spike.md` §5).
-- Duyệt `rules/personal-core.md` và `rules/fe-kit-core.md` (chưa cài vào đâu).
+- Duyệt `rules/personal-core.md` và `rules/fe-kit-core.md` (chưa cài vào đâu; `link` chưa có `--with rules` cho tới khi bạn duyệt).
+- Khi sẵn sàng cài thật: chạy `fe-kit link` (xem việc sẽ làm), rồi `fe-kit link --yes`; sau đó mở `/hooks` trong Codex để duyệt hook, và mở lại các phiên đang chạy.
 - Sandbox `fe-kit-sandbox` vẫn chưa có commit nào (bạn chọn chỉ đẩy `fe-kit` lên GitHub); một lần xoá nhầm là mất.
 - Thử `fe-kit auth login --target <đích> --role <vai>` một lần thật trong terminal của bạn (nó mở cửa sổ trình duyệt và chờ Enter; tôi chỉ kiểm bằng trình duyệt giả).
 - Stub `fe-kit` giả của spike (`~/.local/bin/fe-kit`) **che bản thật** trong shell của Codex (Codex dùng bản chụp PATH nên không nhận PATH ta đặt trước). Gỡ bằng `spike/cleanup.sh` sau khi kiểm GUI xong, hoặc cho phép tôi thay nó bằng symlink tới `bin/fe-kit.mjs`.

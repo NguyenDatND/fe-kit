@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { draftsDir, hasCatchAll } from '../lib/drafts.mjs'
 import { exists } from '../lib/fsx.mjs'
-import { listTracked } from '../lib/git.mjs'
+import { getRemotes, listTracked } from '../lib/git.mjs'
 import { envNames, profileStandards, redactCredentials } from '../lib/profile.mjs'
 import { resolveProject } from '../lib/project.mjs'
 import { warningsBlock } from '../lib/format.mjs'
@@ -21,6 +21,8 @@ function formatContext(data) {
     `Project root: ${data.projectRoot} (${data.isGit ? 'git' : 'not a git repo'})`,
     `Package root: ${data.packageRoot}`,
     `Profile: ${data.profile ? `${data.profile.name} (${data.profile.file})` : 'none matched'}`,
+    `Profiles folder: ${data.profilesDir}`,
+    `Remotes: ${data.remotes.length > 0 ? data.remotes.join(', ') : '(none)'}`,
     `Stack: ${[stack.packageManager, stack.language, stack.uiLibrary, stack.framework, stack.testRunner].filter(Boolean).join(', ') || 'unknown'}`,
   ]
   if (stack.monorepo) lines.push(`Monorepo: ${stack.monorepo.tools.join(', ')}`)
@@ -74,6 +76,8 @@ export async function run({ cwd, env, kitRoot }) {
     projectRoot,
     isGit,
     packageRoot,
+    profilesDir: env.FE_KIT_PROFILES_DIR ?? join(kitRoot, 'profiles'),
+    remotes: isGit ? await getRemotes(projectRoot) : [],
     profile: matched
       ? {
           name: settings.name,

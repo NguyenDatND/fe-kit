@@ -177,7 +177,7 @@ export async function applyPlan(plan, { stateDir, kitRoot, node, deps = {} }) {
         if (before !== undefined) files.push(before)
       } else files.push(recordFor(item, before))
     }
-    state.tools[tool] = { skills: entry.skills.map((skill) => skill.name), files }
+    state.tools[tool] = { mode: entry.mode, skills: entry.skills.map((skill) => skill.name), files }
   }
   await writePrivateJson(statePath(stateDir), state)
   await rm(journalPath(stateDir), { force: true })

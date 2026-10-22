@@ -174,7 +174,7 @@ test('bin: --version, --help, unknown and not-yet-implemented commands', async (
   const version = await runBin(['--version'], kitRoot)
   const help = await runBin(['--help'], kitRoot)
   const unknown = await runBin(['frobnicate'], kitRoot)
-  const planned = await runBin(['doctor'], kitRoot)
+  const planned = await runBin(['mr'], kitRoot)
 
   assert.equal(version.code, 0)
   assert.match(version.stdout, /^\d+\.\d+\.\d+/)
@@ -183,7 +183,7 @@ test('bin: --version, --help, unknown and not-yet-implemented commands', async (
   assert.equal(unknown.code, 2)
   assert.match(unknown.stderr, /unknown command: frobnicate/)
   assert.equal(planned.code, 2)
-  assert.match(planned.stderr, /doctor is not implemented yet/)
+  assert.match(planned.stderr, /mr is not implemented yet/)
 })
 
 test('a profile with a wrongly typed match does not crash context and is reported', async (t) => {
@@ -465,4 +465,17 @@ test('a .fe-kit/.gitignore that cannot be read does not stop context; the drafts
   } finally {
     await chmod(file, 0o644)
   }
+})
+
+test('context says where profiles are kept and what the git remotes are, with any password in a remote hidden', async (t) => {
+  const { data, text } = await context(t, viteReactProject, { git: { remote: 'https://user:s3cret@gitlab.local/fe/shop.git' } })
+  assert.equal(typeof data.profilesDir, 'string')
+  assert.ok(data.profilesDir.length > 0)
+  assert.deepEqual(data.remotes.length, 1)
+  assert.ok(!JSON.stringify(data).includes('s3cret'))
+  assert.ok(!text.includes('s3cret'))
+  assert.match(text, /Profiles folder: /)
+  assert.match(text, /Remotes: .*gitlab\.local\/fe\/shop/)
+  const outside = await context(t, viteReactProject)
+  assert.deepEqual(outside.data.remotes, [])
 })

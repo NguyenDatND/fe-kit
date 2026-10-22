@@ -4,7 +4,7 @@ Bộ skill, agent và CLI cho dev Frontend, chạy giống nhau trên Claude Cod
 
 ## Trạng thái
 
-Phase 0 (spike) xong phần headless; Phase 1 xong phần không phụ thuộc GUI; Phase 2 (kiểm chứng code) xong phần code và nghiệm thu headless; Phase 3 (xem UI thật) xong phần lõi. Chưa cài gì vào thư mục toàn cục của bạn.
+Phase 0 (spike) xong phần headless; Phase 1 xong phần không phụ thuộc GUI; Phase 2 (kiểm chứng code) xong phần code và nghiệm thu headless; Phase 3 (xem UI thật) xong phần lõi; Phase 1b (`shell-guard`, `link`, `doctor`, skill `fe-kit` và `fe-setup`) xong phần code, chưa nghiệm thu trên tool thật. Chưa cài gì vào thư mục toàn cục của bạn.
 
 | Lệnh | Việc | Trạng thái |
 |---|---|---|
@@ -20,9 +20,10 @@ Phase 0 (spike) xong phần headless; Phase 1 xong phần không phụ thuộc G
 | `fe-kit dev` | Chạy, dừng, kiểm dev server của đích ở nền | có |
 | `fe-kit ui-act` | Như `ui` nhưng cho một request ghi đi qua | chưa bật (cần `shell-guard`) |
 | `fe-kit link` / `unlink` | Cài skill và `shell-guard` vào Claude Code, Codex, Antigravity (mặc định chỉ in việc sẽ làm; `--yes` mới ghi); `unlink` gỡ đúng phần đã thêm | có (chưa cài thật vào máy bạn) |
-| `doctor`, `mr`, `secrets`… | | chưa làm |
+| `fe-kit doctor` | Kiểm node, playwright, phần `link` đã cài (còn đủ không), hook guard chạy thật, phiên đăng nhập, bí mật trong file cấu hình, hồ sơ dự án, phiên bản tool; việc chờ bạn ghi là `pending` | có |
+| `mr`, `secrets`… | | chưa làm |
 
-Skill: `fe-standards`, `fe-verify`, `fe-ui-check` (`skills/`, trang giải thích ở `docs/skills/`).
+Skill: `fe-kit` (router) và `fe-setup` (hồ sơ dự án) do bạn gọi tay; `fe-standards`, `fe-verify`, `fe-ui-check` model tự gọi (`skills/`, trang giải thích ở `docs/skills/`).
 
 ## Tài liệu
 

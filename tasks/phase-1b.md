@@ -1,7 +1,7 @@
 # Phase 1b — shell-guard, link, doctor, skill `fe-kit` và `fe-setup`
 
 Nguồn: `docs/plan.md` §5.3 (`link`, `doctor`, `ui-act`), §5.7 (hooks và quyền), §6 (bảng cài), §10 Phase 1; `docs/spike.md` S1, S3, S4, S12; fixture stdin thật ở `tests/fixtures/hooks/{claude,codex,agy}`.
-Trạng thái: **kế hoạch đã duyệt (2026-10-21); đã xong P1B-1a, 1b, 2, 3, 4 (P1B-1..2 đã commit `e2da470`); tiếp theo P1B-5 (`doctor`)**. Chủ đề này đã dùng 2/3 lượt review.
+Trạng thái: **kế hoạch đã duyệt (2026-10-21); đã xong P1B-1a, 1b, 2, 3, 4 (P1B-1..2 đã commit `e2da470`); tiếp theo P1B-8 (nghiệm thu)**. Chủ đề này đã dùng 2/3 lượt review.
 
 ## Mục tiêu (tiêu chí xong)
 
@@ -31,7 +31,10 @@ Trạng thái: **kế hoạch đã duyệt (2026-10-21); đã xong P1B-1a, 1b, 2
 - [x] P1B-2 `hookio.mjs`, `guard-rules.mjs`, `hook-supervisor.mjs`, `hooks/shell-guard.mjs` + `shell-guard-worker.mjs`: 28 test (cả tiến trình thật), 53 đột biến đã xử lý. 955 test xanh, lint sạch.
 - [x] P1B-3 `guard-config.mjs` (sinh cấu hình, thêm vào cuối, gỡ theo dấu vân tay): 19 test, 42 đột biến đã xử lý.
 - [x] P1B-4 `config-files.mjs`, `process-lock.mjs` (tách từ `dev-server.mjs`), `install.mjs`, lệnh `link`/`unlink`: 41 + 3 test, 55 + 27 đột biến đã xử lý; 1018 test xanh. Còn lại tương đương: `seg-star`, `plan-fs-error` (khác biệt chỉ khi có lỗi lập trình), `plan-unknown`.
-- [ ] P1B-5 … P1B-9: chưa làm.
+- [x] P1B-5 `doctor`: 22 test, 41 + 18 đột biến đã xử lý (còn lại tương đương: không); 1040 test xanh.
+- [x] P1B-6 skill `fe-kit` (router) và `fe-setup`, trang `docs/skills/`; `fe-kit context` thêm `profilesDir` và `remotes` để `fe-setup` không phải đoán. `validate` 5 skill, 0 vấn đề.
+- [x] P1B-7 README, `docs/plan.md` (§5.3 `link`, `doctor`).
+- [ ] P1B-8 nghiệm thu, P1B-9 `ui-act` bằng `/dev/tty`: chưa làm.
 
 **Lệch kế hoạch ở P1B-4:** `--with rules` bị từ chối ("chưa có") thay vì có code ẩn sau cờ; tool chưa có thư mục thì bỏ qua trừ khi gọi `--tools`; xung đột khi hồi phục nhật ký chỉ là *ghi chú* (không chặn), vì file không khớp "trước" lẫn "sau" nghĩa là kit không ghi nó (rename nguyên tử) hoặc người dùng sửa sau đó, cả hai đều không làm kit gỡ nhầm.
 

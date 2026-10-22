@@ -44,7 +44,7 @@ async function snapshot(dir) {
   return result
 }
 
-const SKILLS = ['fe-standards', 'fe-ui-check', 'fe-verify']
+const SKILLS = (await readdir(join(kitRoot, 'skills'))).sort() // whatever skills the kit has
 
 test('without --yes nothing is changed, and what would be done is said', async (t) => {
   const { home, state, link: run } = await setup(t)
