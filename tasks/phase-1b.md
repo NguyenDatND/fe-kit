@@ -1,7 +1,7 @@
 # Phase 1b — shell-guard, link, doctor, skill `fe-kit` và `fe-setup`
 
 Nguồn: `docs/plan.md` §5.3 (`link`, `doctor`, `ui-act`), §5.7 (hooks và quyền), §6 (bảng cài), §10 Phase 1; `docs/spike.md` S1, S3, S4, S12; fixture stdin thật ở `tests/fixtures/hooks/{claude,codex,agy}`.
-Trạng thái: **kế hoạch đã duyệt (2026-10-21); đã xong P1B-1a, 1b, 2, 3, 4 (P1B-1..2 đã commit `e2da470`); tiếp theo P1B-8 (nghiệm thu)**. Chủ đề này đã dùng 2/3 lượt review.
+Trạng thái: **kế hoạch đã duyệt (2026-10-21); đã xong P1B-1a, 1b, 2, 3, 4 (P1B-1..2 đã commit `e2da470`); P1B-8 đã nghiệm thu headless; còn các ô chờ bạn (xem `docs/acceptance/phase-1b.md`)**. Chủ đề này đã dùng 2/3 lượt review.
 
 ## Mục tiêu (tiêu chí xong)
 
@@ -35,7 +35,7 @@ Trạng thái: **kế hoạch đã duyệt (2026-10-21); đã xong P1B-1a, 1b, 2
 - [x] P1B-6 skill `fe-kit` (router) và `fe-setup`, trang `docs/skills/`; `fe-kit context` thêm `profilesDir` và `remotes` để `fe-setup` không phải đoán. `validate` 5 skill, 0 vấn đề.
 - [x] P1B-7 README, `docs/plan.md` (§5.3 `link`, `doctor`).
 - [x] P1B-9 `ui-act` bật bằng xác nhận `yes` trên `/dev/tty` (`ui-act-gate.mjs`: `confirmOnTerminal`, `confirmUiAct`), runner giữ thêm khoá; 11 test, 15 đột biến đã xử lý. Chưa thử tay trong terminal thật (việc của bạn: một lần).
-- [ ] P1B-8 nghiệm thu trên tool thật: chưa làm.
+- [x] P1B-8 nghiệm thu headless trên 3 tool thật: `docs/acceptance/phase-1b.md`. Claude và Codex đạt đủ (lệnh vô hại chạy, commit và `ui-act` bị hỏi rồi từ chối khi headless, đọc kho bí mật bị hook từ chối); `agy` chỉ chứng minh được phần hook từ chối (đường `force_ask` cần allow-rule ở `~/.gemini`, chưa được phép). Phase 1 chưa xong: còn các ô GUI, superpowers, rules.
 
 **Lệch kế hoạch ở P1B-4:** `--with rules` bị từ chối ("chưa có") thay vì có code ẩn sau cờ; tool chưa có thư mục thì bỏ qua trừ khi gọi `--tools`; xung đột khi hồi phục nhật ký chỉ là *ghi chú* (không chặn), vì file không khớp "trước" lẫn "sau" nghĩa là kit không ghi nó (rename nguyên tử) hoặc người dùng sửa sau đó, cả hai đều không làm kit gỡ nhầm.
 
