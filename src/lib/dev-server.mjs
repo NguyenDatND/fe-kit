@@ -1,11 +1,13 @@
-import { execFile, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { closeSync, constants, fchmodSync, openSync } from 'node:fs'
-import { link, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
 import { UsageError } from './errors.mjs'
 import { lstatOrNull } from './fsx.mjs'
+import { isAlive, startedAt, withProcessLock } from './process-lock.mjs'
+
+export { isAlive }
 
 /**
  * The dev server of a target, kept running in the background across commands. It is not what `exec.mjs` does (that runs a
@@ -14,7 +16,6 @@ import { lstatOrNull } from './fsx.mjs'
  * process once the first has died, and that one must not be killed.
  */
 
-const execFileAsync = promisify(execFile)
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const isText = (value) => typeof value === 'string' && value !== ''
 
@@ -27,25 +28,6 @@ export class DevBusyError extends Error {
   constructor(pid) {
     super(`another fe-kit dev command is running (pid ${pid})`)
     this.pid = pid
-  }
-}
-
-export function isAlive(pid) {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return error.code === 'EPERM' // it exists, it is only not ours to signal
-  }
-}
-
-/** When the process began, as `ps` prints it: what tells a process from another that got its pid later. Null when it is gone. */
-async function startedAt(pid) {
-  try {
-    const { stdout } = await execFileAsync('ps', ['-o', 'lstart=', '-p', String(pid)])
-    return stdout.trim() || null
-  } catch {
-    return null
   }
 }
 
@@ -115,72 +97,8 @@ async function writeRecord(drafts, record) {
   }
 }
 
-const readOwner = (file) => readFile(file, 'utf8').then((text) => {
-  const owner = JSON.parse(text)
-  return Number.isInteger(owner?.pid) && owner.pid > 0 ? owner : null
-}, () => null).catch(() => null)
-const UNREADABLE_STALE_MS = 30_000
-
-/** Whether the lock's owner is still the process that took it (a pid can be handed to another process after it dies). */
-async function holds(owner) {
-  return isAlive(owner.pid) && (await startedAt(owner.pid)) === owner.started
-}
-
-/**
- * Takes the lock of the project's dev server, or throws DevBusyError. The lock file is published whole (written aside, then
- * linked into place, which fails if it is there), so nobody ever reads it empty. A lock whose owner is gone is taken over by
- * moving it aside under a name of ours, and looking at what was moved: if that is not what was found stale, a live lock was
- * published in between, and it is put back. A file that cannot be read is respected for as long as it is new.
- */
-async function acquire(drafts) {
-  const mine = { pid: process.pid, started: await startedAt(process.pid), nonce: randomBytes(8).toString('hex') }
-  const staging = `${lockPath(drafts)}.${process.pid}-${mine.nonce}.tmp`
-  await writeFile(staging, JSON.stringify(mine), { flag: 'wx', mode: 0o600 })
-  try {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        await link(staging, lockPath(drafts))
-        return mine
-      } catch (error) {
-        if (error.code !== 'EEXIST') throw error
-      }
-      const found = await stat(lockPath(drafts)).then((info) => ({ owner: null, age: Date.now() - info.mtimeMs }), () => null)
-      if (found === null) continue // it went away while we looked
-      found.owner = await readOwner(lockPath(drafts))
-      if (found.owner !== null ? await holds(found.owner) : found.age < UNREADABLE_STALE_MS) throw new DevBusyError(found.owner?.pid ?? 'unknown')
-
-      const aside = `${lockPath(drafts)}.stale-${process.pid}-${mine.nonce}`
-      try {
-        await rename(lockPath(drafts), aside)
-      } catch (error) {
-        if (error.code === 'ENOENT') continue
-        throw error
-      }
-      const moved = await readOwner(aside)
-      if (JSON.stringify(moved) !== JSON.stringify(found.owner)) {
-        // Not the lock that was stale: someone published a live one after we looked. Put it back, and give way.
-        await link(aside, lockPath(drafts)).catch(() => {}) // if that place is taken again too, the lock moved is lost; the odds are those of three commands in one moment
-        await rm(aside, { force: true })
-        throw new DevBusyError(moved?.pid ?? 'unknown')
-      }
-      await rm(aside, { force: true })
-    }
-    throw new DevBusyError('unknown')
-  } finally {
-    await rm(staging, { force: true })
-  }
-}
-
 /** Start and stop change what the record says, and two of them at once could each undo what the other did. One at a time per project. */
-export async function withLock(drafts, work) {
-  const mine = await acquire(drafts)
-  try {
-    return await work()
-  } finally {
-    // Only a lock that is still ours: one that a rival took over meanwhile is not for us to remove.
-    if ((await readOwner(lockPath(drafts)))?.nonce === mine.nonce) await rm(lockPath(drafts), { force: true })
-  }
-}
+export const withLock = (drafts, work) => withProcessLock(lockPath(drafts), work, (pid) => new DevBusyError(pid))
 
 async function stopLocked(drafts, graceMs) {
   const { state, record } = await inspect(drafts)

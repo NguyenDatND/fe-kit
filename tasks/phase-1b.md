@@ -1,7 +1,7 @@
 # Phase 1b — shell-guard, link, doctor, skill `fe-kit` và `fe-setup`
 
 Nguồn: `docs/plan.md` §5.3 (`link`, `doctor`, `ui-act`), §5.7 (hooks và quyền), §6 (bảng cài), §10 Phase 1; `docs/spike.md` S1, S3, S4, S12; fixture stdin thật ở `tests/fixtures/hooks/{claude,codex,agy}`.
-Trạng thái: **kế hoạch đã duyệt (2026-10-21); đã xong P1B-1a, 1b, 2 (chưa commit); tiếp theo P1B-3**. Chủ đề này đã dùng 2/3 lượt review.
+Trạng thái: **kế hoạch đã duyệt (2026-10-21); đã xong P1B-1a, 1b, 2, 3, 4 (P1B-1..2 đã commit `e2da470`); tiếp theo P1B-5 (`doctor`)**. Chủ đề này đã dùng 2/3 lượt review.
 
 ## Mục tiêu (tiêu chí xong)
 
@@ -29,7 +29,15 @@ Trạng thái: **kế hoạch đã duyệt (2026-10-21); đã xong P1B-1a, 1b, 2
 - [x] P1B-1a `shell-tokens.mjs` (bộ tách lệnh): 25 test, 51 đột biến đã xử lý (còn sống: `seg-star` tương đương).
 - [x] P1B-1b `shell-policy.mjs` (chính sách `allow`/`ask`/`deny`, kho bí mật, cwd, glob, symlink): 21 test, 85 đột biến đã xử lý.
 - [x] P1B-2 `hookio.mjs`, `guard-rules.mjs`, `hook-supervisor.mjs`, `hooks/shell-guard.mjs` + `shell-guard-worker.mjs`: 28 test (cả tiến trình thật), 53 đột biến đã xử lý. 955 test xanh, lint sạch.
-- [ ] P1B-3 … P1B-9: chưa làm.
+- [x] P1B-3 `guard-config.mjs` (sinh cấu hình, thêm vào cuối, gỡ theo dấu vân tay): 19 test, 42 đột biến đã xử lý.
+- [x] P1B-4 `config-files.mjs`, `process-lock.mjs` (tách từ `dev-server.mjs`), `install.mjs`, lệnh `link`/`unlink`: 41 + 3 test, 55 + 27 đột biến đã xử lý; 1018 test xanh. Còn lại tương đương: `seg-star`, `plan-fs-error` (khác biệt chỉ khi có lỗi lập trình), `plan-unknown`.
+- [ ] P1B-5 … P1B-9: chưa làm.
+
+**Lệch kế hoạch ở P1B-4:** `--with rules` bị từ chối ("chưa có") thay vì có code ẩn sau cờ; tool chưa có thư mục thì bỏ qua trừ khi gọi `--tools`; xung đột khi hồi phục nhật ký chỉ là *ghi chú* (không chặn), vì file không khớp "trước" lẫn "sau" nghĩa là kit không ghi nó (rename nguyên tử) hoặc người dùng sửa sau đó, cả hai đều không làm kit gỡ nhầm.
+
+**Cú pháp chưa kiểm trên tool thật (để P1B-8):** quy tắc `command(...)` và `read_file(…/**)` của `agy` CLI (suy từ spike, glob của deny chưa biết), `Read(~/…/**)` và `Bash(… :*)` của Claude (đã có trong docs/spike nhưng chưa thử bằng chính file kit sinh), hook `timeout: 10` ở cả 3 tool, `.rules` của Codex đọc `fe-kit.rules` (spike đã kiểm `prefix_rule(... decision=...)`).
+
+**Ghi nhận:** để thử dry-run, tôi đã chạy `node bin/fe-kit.mjs link` (không `--yes`) trên HOME thật một lần: lệnh chỉ đọc các file cấu hình (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.gemini/config/hooks.json`, `~/.gemini/antigravity-cli/settings.json`, và xem các thư mục skill) và in số mục sẽ thêm; không ghi gì, không in nội dung. Kết quả: cả 3 tool đọc được, không có vấn đề.
 
 **Chỗ lệch kế hoạch (ghi để bạn biết):** Codex không hỏi được qua hook, nên hook chỉ im lặng khi lệnh là một dạng đơn giản mà `.rules` bắt (`guard-rules.mjs`), còn dạng khác cần hỏi (`git -C x push`, `bash -c 'git push'`, lệnh nối) thì hook **từ chối**. Policy trả thêm `argv` cho việc này.
 

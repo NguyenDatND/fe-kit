@@ -6,8 +6,8 @@ import { parseArgs } from 'node:util'
 import { UsageError } from '../src/lib/errors.mjs'
 
 const kitRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-const AVAILABLE = ['context', 'init', 'validate', 'scan', 'rules', 'test', 'verify', 'auth', 'ui', 'dev', 'ui-act']
-const PLANNED = ['mr', 'mcp', 'mcp-run', 'secrets', 'link', 'unlink', 'doctor']
+const AVAILABLE = ['context', 'init', 'validate', 'scan', 'rules', 'test', 'verify', 'auth', 'ui', 'dev', 'ui-act', 'link', 'unlink']
+const PLANNED = ['mr', 'mcp', 'mcp-run', 'secrets', 'doctor']
 
 const HELP = `fe-kit: frontend kit for Claude Code, Codex and Antigravity
 
@@ -25,6 +25,8 @@ Commands:
   ui         look at the target in a browser: pictures, console errors, failed requests, steps
   dev        start, stop and check the dev server of a target, in the background
   ui-act     like ui, but lets one write request through (not enabled yet: it needs shell-guard)
+  link       put the skills and shell-guard into Claude Code, Codex and Antigravity (dry run unless --yes)
+  unlink     take out exactly what link added
 
 Not implemented yet: ${PLANNED.join(', ')}
 

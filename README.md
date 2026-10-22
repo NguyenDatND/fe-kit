@@ -19,7 +19,8 @@ Phase 0 (spike) xong phần headless; Phase 1 xong phần không phụ thuộc G
 | `fe-kit ui` | Xem đích trong Chromium thật: ảnh nhiều viewport, lỗi console, request lỗi, kịch bản bước; đích dùng chung chỉ đọc | có |
 | `fe-kit dev` | Chạy, dừng, kiểm dev server của đích ở nền | có |
 | `fe-kit ui-act` | Như `ui` nhưng cho một request ghi đi qua | chưa bật (cần `shell-guard`) |
-| `link`, `doctor`, `mr`, `secrets`… | | chưa làm |
+| `fe-kit link` / `unlink` | Cài skill và `shell-guard` vào Claude Code, Codex, Antigravity (mặc định chỉ in việc sẽ làm; `--yes` mới ghi); `unlink` gỡ đúng phần đã thêm | có (chưa cài thật vào máy bạn) |
+| `doctor`, `mr`, `secrets`… | | chưa làm |
 
 Skill: `fe-standards`, `fe-verify`, `fe-ui-check` (`skills/`, trang giải thích ở `docs/skills/`).
 
