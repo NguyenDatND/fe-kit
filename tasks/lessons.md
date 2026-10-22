@@ -94,3 +94,14 @@ Ghi sau mỗi lần bị sửa (người dùng hoặc reviewer): mẫu lỗi và
 62. **Khi nhiều lớp cùng bắt một đầu vào, kiểm đột biến chỉ ra lớp nào chưa có test riêng.** `cat ~/.config/fe-kit/env` bị chữ `.config/fe-kit` bắt trước nên mọi đột biến của việc giải đường dẫn, symlink, glob đều "sống". Mỗi lớp cần một đầu vào mà chỉ lớp đó thấy: thư mục state tuỳ chỉnh không có chữ nhận diện, HOME là symlink, glob từ thư mục cha, `cwd` trong kho với lệnh không có đối số.
 63. **Test tiến trình thật đặt `await` trước khi gọi hàm cần gắn handler thì mất sự kiện.** `setImmediate(() => stream.destroy(err))` rồi `workerPath: await worker(...)` làm lỗi phát ra khi chưa có `on('error')`; tính mọi thứ cần `await` trước khi tạo luồng.
 64. **Mỗi mã "dự phòng" thừa là một đột biến sống:** `skipNewlines` sau toán tử, kiểm `(` giữa lệnh, kiểm `;;` đều bị vòng lặp chính đã bắt; bỏ đi thì ngắn hơn và vẫn xanh. Đột biến sống thì hoặc thêm test, hoặc xoá mã.
+
+## 2026-10-22 — Phase 1b: review code lượt 1 của Codex (7 điểm, `tasks/phase-1b.md`)
+
+65. **Từ khoá của shell có tuỳ chọn riêng (`time -p`) thì bỏ từ khoá mà không bỏ tuỳ chọn sẽ biến tuỳ chọn thành tên lệnh.** Mọi nơi bộ tách "bỏ bớt" một từ phải hỏi: từ đó có đi kèm gì không.
+66. **Một quy tắc đã xét "lệnh X" phải xét cả những cách gọi X qua wrapper** (`command cd`, `builtin cd`): theo dõi cwd và `launchOf` dùng hai cách bóc wrapper khác nhau nên lệch nhau.
+67. **Công cụ tìm kiếm không đường dẫn đọc thư mục hiện tại:** kiểm "đối số có chạm kho" bỏ sót trường hợp không có đối số nào. Phải kiểm cả phạm vi mặc định.
+68. **Thông báo lỗi của parser (V8 JSON) trích lại đầu vào.** Với file có thể chứa token, đừng chuyển `error.message` ra ngoài; test bằng chuỗi ngắn (chuỗi dài bị V8 cắt nên test xanh giả).
+69. **Journal phải ghi MỌI thay đổi của giao dịch, không chỉ loại thay đổi dễ nghĩ tới** (skill, không chỉ file cấu hình).
+70. **Bao `{exitCode, stdout}` hợp lệ chưa đủ: stdout còn phải là thứ tool đọc được**, vì Claude/Codex cho lệnh chạy khi hook in ra thứ không đọc được. Và một hàm kiểm chạy trong handler không được ném lỗi.
+71. **Luồng đọc từ file handle chờ lần đọc đang chạy khi đóng:** với `/dev/tty` không ai gõ, lần đọc không bao giờ xong. Dùng `tty.ReadStream` rồi `destroy()`; chỉ test được bằng pty thật (`script`), PassThrough giả không tái hiện.
+

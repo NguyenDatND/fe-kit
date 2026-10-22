@@ -91,3 +91,20 @@ Lượt 17 (Codex, bản đã sửa, 5 điểm: 1 BLOCKER, 4 MAJOR; #6 và #7 c�
 | 3 | MAJOR | hạn giờ chưa bao toàn bộ giám sát (stdin treo) | Một hạn giờ cho cả bộ giám sát từ trước khi đọc stdin, SIGKILL con, giới hạn byte (giả định 6, P1B-2) |
 | 4 | MAJOR | cwd chỉ theo dõi `cd x &&` | Tập cwd có thể có qua mọi toán tử, subshell, `cd` thất bại (giả định 8, P1B-1a/1b) |
 | 5 | MAJOR | ghi manifest hỏng làm mất quyền sở hữu mục đã thêm | Journal giao dịch bền, phục hồi bằng so trạng thái (giả định 5, P1B-4) |
+
+## Review code Phase 1b (Codex qua herdr, chủ đề mới `e7c3430..df8bb85`, lượt 1 = r18; còn 2 lượt)
+
+Báo cáo: `spike/review/r18-findings.md`. 7 điểm MAJOR, không có BLOCKER; tôi chạy thử từng điểm trên mã trước khi sửa và cả 7 đều tái hiện (điểm 7 bằng pty thật: tiến trình treo đến khi bị giết). Sửa theo TDD, test đỏ trước.
+
+| # | Mức | Điểm | Sửa |
+|---|---|---|---|
+| 1 | MAJOR | `time -p git push` được cho qua (`-p` thành tên lệnh) | `tokens`: bỏ `-p` và `--` ngay sau từ khoá `time` |
+| 2 | MAJOR | `command cd X; cat env` không đổi cwd | `commandsOf` bỏ tiền tố `command`/`builtin` (và `-p`, `--`) khi theo dõi `cd` |
+| 3 | MAJOR | `rg TOKEN` (không đường dẫn) từ `~/.config` hay `~` được cho qua | `searchesWorkingFolder`: `rg/ag/ack` không đường dẫn, `grep -r` không đường dẫn, `find` không đường dẫn → xét cwd bằng `containsStore`; cwd không rõ thì `ask` |
+| 4 | MAJOR | lỗi parse JSON của V8 trích nguyên nội dung file (có thể là token) vào báo cáo | `parseJsonConfig` dùng câu cố định, không trích |
+| 5 | MAJOR | journal chỉ ghi file cấu hình, crash sau khi tạo skill thì `unlink` bỏ sót skill | journal ghi cả `skills`, ghi journal khi có skill phải tạo; `recover` ghi tên skill vào `install.json` |
+| 6 | MAJOR | bộ giám sát nhận `{"exitCode":0,"stdout":"not json"}`; tool sẽ cho lệnh chạy | `hook-answer.mjs`: `answerAccepted` kiểm câu trả lời theo từng tool (Codex không bao giờ `ask`); `supervise({ accepts })`, mặc định chỉ nhận im lặng; `accepts` ném lỗi thì là block |
+| 7 | MAJOR | `confirmOnTerminal` treo ở bước đóng `/dev/tty` khi hết giờ | đọc bằng `tty.ReadStream` và `destroy()` khi xong; test pty thật (macOS) cho hết giờ, `yes`, `y`, chữ khác |
+
+Chỗ tôi không theo Codex: điểm 3 Codex nói "không coi pattern là toán hạng đường dẫn"; tôi đếm toán hạng (có bảng các option nhận giá trị) nên `rg -g '*.js' TOKEN` vẫn bị bắt; `rg` đọc từ pipe khi không có đường dẫn cũng bị bắt trong cwd chứa kho (từ chối nhầm hiếm, chấp nhận).
+

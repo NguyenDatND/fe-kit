@@ -1,4 +1,5 @@
 import { codexRulePrefixes, isCoveredByRules } from './guard-rules.mjs'
+import { detectTool } from './hook-answer.mjs'
 import { decideCommand, decidePath } from './shell-policy.mjs'
 
 // What the three tools send a hook before a tool call, and how each wants the answer. Claude and Codex send
@@ -7,13 +8,7 @@ import { decideCommand, decidePath } from './shell-policy.mjs'
 
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value)
 
-export function detectTool(input) {
-  if (!isObject(input)) return null
-  if (isObject(input.toolCall)) return typeof input.toolCall.name === 'string' ? 'agy' : null
-  if (typeof input.tool_name !== 'string' || typeof input.hook_event_name !== 'string') return null
-  if (input.turn_id !== undefined) return typeof input.turn_id === 'string' ? 'codex' : null
-  return 'claude'
-}
+export { detectTool }
 
 function requiredString(value, field) {
   if (typeof value !== 'string') throw new Error(`the tool call has no ${field}`)

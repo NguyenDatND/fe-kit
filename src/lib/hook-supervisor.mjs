@@ -13,9 +13,10 @@ const MAX_OUTPUT = 64 * 1024
 
 /**
  * Resolves `{ exitCode, stdout, stderr }`, never rejects. The worker prints `{ exitCode, stdout }` as JSON, where
- * `exitCode` is 0 (answer with `stdout`) or 2 (block).
+ * `exitCode` is 0 (answer with `stdout`) or 2 (block). `accepts(stdout, body)` says whether an answer is one the tool
+ * understands (`body`: what the tool sent): a hook that prints something the tool cannot read is not a block to it.
  */
-export function supervise({ input, workerPath, command = process.execPath, deadlineMs = DEADLINE_MS, maxInput = MAX_INPUT, maxOutput = MAX_OUTPUT }) {
+export function supervise({ input, workerPath, command = process.execPath, deadlineMs = DEADLINE_MS, accepts = (stdout) => stdout === '', maxInput = MAX_INPUT, maxOutput = MAX_OUTPUT }) {
   return new Promise((resolve) => {
     let settled = false
     let child = null
@@ -43,6 +44,7 @@ export function supervise({ input, workerPath, command = process.execPath, deadl
     })
 
     function startWorker(body) {
+      const sent = body.toString('utf8')
       child = spawn(command, [workerPath], { stdio: ['pipe', 'pipe', 'ignore'] })
       child.on('error', () => block('the guard could not be started'))
       child.stdin.on('error', () => {}) // a worker that exits before reading everything: its exit tells
@@ -54,11 +56,21 @@ export function supervise({ input, workerPath, command = process.execPath, deadl
         if (output.length > maxOutput) return block('the answer is too large')
         const answer = output.endsWith('}') ? readAnswer(output) : null
         if (answer === false) block('the guard gave an answer that cannot be read')
+        else if (answer !== null && answer.exitCode === 0 && !isAccepted(accepts, answer.stdout, sent)) block('the guard gave an answer the tool would not understand')
         else if (answer !== null) finish({ exitCode: answer.exitCode, stdout: answer.stdout, stderr: typeof answer.stderr === 'string' ? answer.stderr : '' })
       })
       child.on('close', () => block('the guard gave no answer'))
     }
   })
+}
+
+/** A check that fails is a no: this runs where an exception would end the process, and the host runs the command when the hook crashes. */
+function isAccepted(accepts, stdout, body) {
+  try {
+    return accepts(stdout, body) === true
+  } catch {
+    return false
+  }
 }
 
 /** The worker's answer when `text` is a whole, valid one; null while it is not whole yet; false when it is whole and wrong. */

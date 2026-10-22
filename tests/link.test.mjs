@@ -482,3 +482,63 @@ test('a file fe-kit made stays when the person has put something of their own in
   assert.equal(result.exitCode, 0)
   assert.deepEqual(await readJson(file), { theirs: true })
 })
+
+test('a config file that is not valid JSON is a problem that does not repeat what the file holds', async (t) => {
+  const secret = 'SECRET42'
+  const broken = `{"token":${secret}}`
+  const { home, link: run, unlink: undo } = await setup(t, { files: { '.claude/settings.json': broken } })
+
+  const planned = await run({})
+  const refused = await run({ yes: true })
+  assert.equal(refused.exitCode, 1)
+  assert.match(refused.text, /settings\.json: not valid JSON/)
+  for (const output of [planned, refused]) assert.ok(!output.text.includes(secret) && !JSON.stringify(output.data).includes(secret), 'the text and the data leave the content out')
+
+  await writeFile(join(home, '.claude/settings.json'), '{}\n')
+  await run({ yes: true })
+  await writeFile(join(home, '.claude/settings.json'), broken)
+  const undone = await undo({ yes: true })
+  assert.equal(undone.exitCode, 1)
+  assert.ok(!undone.text.includes(secret) && !JSON.stringify(undone.data).includes(secret))
+})
+
+test('a run that stops after the skills are made and before any file is written: unlink on its own still takes the skills out', async (t) => {
+  const { home, state, link: run, unlink: undo } = await setup(t)
+  const before = await snapshot(home)
+  const crashed = await run({ yes: true }, { beforeCommit: () => { throw new Error('killed') } }).catch((error) => error.message)
+  assert.equal(crashed, 'killed')
+  const made = Object.keys(await snapshot(home)).filter((path) => !(path in before))
+  assert.ok(made.some((path) => path.endsWith(`/${SKILLS[0]}`)), 'the skills were made before the stop')
+  assert.ok(await exists(join(state, 'install.journal.json')))
+
+  const undone = await undo({ yes: true })
+
+  assert.equal(undone.exitCode, 0, undone.text)
+  assert.match(undone.text, /finished an interrupted/)
+  const after = await snapshot(home)
+  assert.deepEqual(Object.keys(after).filter((path) => !(path in before) && after[path] !== 'dir'), [], 'nothing of fe-kit is left')
+  assert.ok(!(await exists(join(state, 'install.journal.json'))))
+})
+
+test('a run that only has skills to make writes its journal first too', async (t) => {
+  const { home, state, link: run, unlink: undo } = await setup(t)
+  await run({ yes: true })
+  const removed = join(home, '.claude/skills', SKILLS[0])
+  await rm(removed, { recursive: true, force: true })
+  const crashed = await run({ yes: true }, { beforeRecord: () => { throw new Error('killed') } }).catch((error) => error.message)
+  assert.equal(crashed, 'killed')
+  const journal = await readJson(join(state, 'install.journal.json'))
+  assert.deepEqual(journal.skills.map((skill) => [skill.tool, skill.name]), [['claude', SKILLS[0]]])
+  assert.ok(await exists(removed), 'the skill was made again before the stop')
+  await undo({ yes: true })
+  assert.ok(!(await exists(removed)))
+})
+
+test('what an interrupted run made is written into the record when the next command finishes it', async (t) => {
+  const { state, link: run, unlink: undo } = await setup(t)
+  await run({ yes: true }, { beforeCommit: () => { throw new Error('killed') } }).catch(() => {})
+  await undo({ yes: true, tools: 'claude' }) // the other tools stay recorded
+  const recorded = await readJson(join(state, 'install.json'))
+  assert.deepEqual(Object.keys(recorded.tools).sort(), ['antigravity', 'codex'])
+  for (const tool of ['codex', 'antigravity']) assert.deepEqual(recorded.tools[tool].skills, SKILLS, tool)
+})

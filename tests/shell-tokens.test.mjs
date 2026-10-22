@@ -251,3 +251,21 @@ test('a long command is parsed in a time that grows with its length', () => {
   }
   assert.ok(performance.now() - began < 3000)
 })
+
+test('`time` and its own options are dropped, so that what is left is the command', () => {
+  assert.deepEqual(lines('time -p git push'), [['git', 'push']])
+  assert.deepEqual(lines('time -p -- git push'), [['git', 'push']])
+  assert.deepEqual(lines('time git push'), [['git', 'push']])
+  assert.deepEqual(lines('git push -p'), [['git', 'push', '-p']])
+  assert.deepEqual(lines('time -v git push'), [['-v', 'git', 'push']]) // not an option of `time`: the shell would refuse it
+})
+
+test('command cd and builtin cd change the directory as cd does', () => {
+  assert.deepEqual(cwdsOf('command cd x; cat a'), ['/p', '/p/x'])
+  assert.deepEqual(cwdsOf('builtin cd x; cat a'), ['/p', '/p/x'])
+  assert.deepEqual(cwdsOf('command -p cd x; cat a'), ['/p', '/p/x'])
+  assert.deepEqual(cwdsOf('command builtin cd x; cat a'), ['/p', '/p/x'])
+  assert.deepEqual(cwdsOf('command cd; cat a'), ['/h', '/p'])
+  assert.deepEqual(cwdsOf('command -v cd; cat a'), ['/p'])
+  assert.deepEqual(cwdsOf('command ls x; cat a'), ['/p'])
+})

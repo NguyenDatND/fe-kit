@@ -297,6 +297,41 @@ function nodeReason(args) {
   return null
 }
 
+// What takes its pattern from an option and so has one word less to give (`rg -e x`), and the options that are followed by a value of their own.
+const PATTERN_OPTIONS = ['-e', '-f', '--regexp', '--file']
+const OPTIONS_WITH_VALUE = [
+  ...PATTERN_OPTIONS, '-g', '--glob', '--iglob', '-t', '-T', '--type', '--type-not', '-A', '-B', '-C', '--after-context', '--before-context', '--context', '-m', '--max-count', '-j', '--threads', '-M', '--max-columns', '--max-depth', '-d',
+  '--directories', '-D', '--devices', '--include', '--exclude', '--exclude-dir', '--include-dir', '--label', '-r', '--replace', '-E', '--engine', '--sort', '--sortr', '--pre', '--pre-glob', '--colors', '--path-separator', '--ignore-file', '--encoding',
+]
+const RG_ONLY_VALUES = ['-r', '-E'] // `grep -r` recurses and `grep -E` is the extended syntax; for rg they take a value
+const GREPS = new Set(['grep', 'egrep', 'fgrep'])
+const FIND_EXPRESSION_START = /^(-|!$|\(|\)$)/
+
+/**
+ * Whether a recursive search is given no folder, so that it searches the one it runs in. `rg`, `ag` and `ack` do that
+ * with no path; `grep` only with -r; `find` when its first word is already part of the expression.
+ */
+function searchesWorkingFolder(name, args) {
+  if (name === 'find') return args.length === 0 || FIND_EXPRESSION_START.test(args[0].text)
+  if (GREPS.has(name) && !args.some((word) => /^-[A-Za-z]*[rR]/.test(word.text) || /^--(dereference-)?recursive$/.test(word.text))) return false
+  if (!GREPS.has(name) && !['rg', 'ag', 'ack'].includes(name)) return false
+  let positional = 0
+  let patternFromOption = false
+  for (let index = 0; index < args.length; index++) {
+    const text = args[index].text
+    if (text === '--') {
+      positional += args.length - index - 1
+      break
+    }
+    if (!text.startsWith('-') || text === '-') positional++
+    else if (OPTIONS_WITH_VALUE.includes(text) && (name === 'rg' || !RG_ONLY_VALUES.includes(text))) {
+      patternFromOption ||= PATTERN_OPTIONS.includes(text)
+      index++
+    } else if (/^--?(regexp|file)=|^-[ef]./.test(text)) patternFromOption = true
+  }
+  return positional <= (patternFromOption ? 0 : 1)
+}
+
 function inspectStore(command, launch, ctx, findings) {
   const name = launch?.kind === 'run' ? launch.name : null
   const found = () => findings.push(deny(STORE_REASON))
@@ -309,6 +344,10 @@ function inspectStore(command, launch, ctx, findings) {
   for (const [index, word] of command.words.entries()) {
     if (index === 0 && !word.text.includes('/')) continue // a program found on the PATH is not a file in this folder
     if (wordHitsStore(word, command.cwds, recursive, ctx)) found()
+  }
+  if (recursive && searchesWorkingFolder(name, launch.args)) {
+    if (command.cwds.some((cwd) => cwd !== null && containsStore(cwd, ctx))) found()
+    else if (command.cwds.includes(null)) findings.push(ask(`${name} searches the folder it runs in, and that is not known (after a cd that could not be followed)`))
   }
   // A relative name read after a `cd` that cannot be followed may be anywhere, the store included.
   if (name !== null && READERS.has(name) && command.cwds.includes(null)) {

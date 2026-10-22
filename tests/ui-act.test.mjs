@@ -219,3 +219,35 @@ describe('the runner holds the gate itself, and with the gate open the one permi
     assert.equal(data.guard.filter((event) => event.kind === 'blocked').length, 1)
   })
 })
+
+/** Runs the question in a program that has a terminal of its own, which `typed` is shell text that writes to; resolves what it printed, or null when it did not end in time. */
+async function askOnTerminal(t, typed, timeoutMs = 500) {
+  const { spawn } = await import('node:child_process')
+  const gate = fileURLToPath(new URL('../src/lib/ui-act-gate.mjs', import.meta.url))
+  const code = `import { confirmOnTerminal } from ${JSON.stringify(gate)}; process.on('exit', () => console.log('ended')); console.log('result:' + (await confirmOnTerminal('q', { timeoutMs: ${timeoutMs} })))`
+  // `script` gives the program a terminal of its own, and needs a real pipe for its input.
+  const child = spawn('sh', ['-c', `(${typed}) | script -q /dev/null "$0" --input-type=module -e "$1"`, process.execPath, code], { stdio: ['ignore', 'pipe', 'ignore'], detached: true })
+  t.after(() => process.kill(-child.pid, 'SIGKILL'))
+  let output = ''
+  return new Promise((resolve) => {
+    child.stdout.on('data', (chunk) => {
+      output += chunk
+      if (output.includes('ended')) resolve(output)
+    })
+    setTimeout(() => resolve(null), 6000)
+  })
+}
+
+const terminalTest = { skip: process.platform !== 'darwin' }
+
+test('on a real terminal nobody types on, the question ends at the time limit and the process can end', terminalTest, async (t) => {
+  const output = await askOnTerminal(t, 'sleep 20')
+  assert.notEqual(output, null, 'the process did not end after the time limit')
+  assert.match(output, /result:false/)
+})
+
+test('on a real terminal, yes allows and anything else does not', terminalTest, async (t) => {
+  assert.match(await askOnTerminal(t, 'sleep 1; echo yes; sleep 20', 5000), /result:true/)
+  assert.match(await askOnTerminal(t, 'sleep 1; echo y; sleep 20', 5000), /result:false/)
+  assert.match(await askOnTerminal(t, 'sleep 1; echo nope; sleep 20', 5000), /result:false/)
+})

@@ -194,3 +194,10 @@ test('a program or a hook path with a space in it is quoted for the shell that r
 test('an unknown tool has no plan', () => {
   assert.throws(() => guardPlan({ tool: 'vim', ...context() }), /unknown tool/)
 })
+
+test('JSON that cannot be read is refused with words that do not quote the text', () => {
+  const secret = 'SECRET42'
+  for (const text of [`{"token":${secret}}`, `{"a": '${secret}'}`, `{"a":1,}${secret}`, `${secret}`]) {
+    assert.throws(() => parseJsonConfig(text), (error) => error instanceof ConfigProblem && /not valid JSON/.test(error.message) && !error.message.includes(secret))
+  }
+})

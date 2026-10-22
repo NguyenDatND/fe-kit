@@ -21,8 +21,9 @@ export function parseJsonConfig(text) {
   let parsed
   try {
     parsed = JSON.parse(text)
-  } catch (error) {
-    throw new ConfigProblem(`not valid JSON (${error.message})`)
+  } catch {
+    // The parser's own message quotes the text around the mistake, and this is a file that may hold a token.
+    throw new ConfigProblem('not valid JSON; fix it or remove the broken part, then run the command again')
   }
   if (!isPlainObject(parsed)) throw new ConfigProblem('the file does not hold a JSON object')
   return parsed

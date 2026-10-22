@@ -297,3 +297,12 @@ test('a record that cannot be opened for lack of permission is a problem, not a 
   assert.equal(byId(result, 'install').status, 'problem')
   assert.match(byId(result, 'install').message, /EACCES/)
 })
+
+test('a config file that is not valid JSON is reported without what it holds', async (t) => {
+  const { home, check } = await setup(t)
+  const secret = 'SECRET42'
+  await writeFile(join(home, '.claude/settings.json'), `{"token":${secret}}`)
+  const result = await check()
+  assert.match(byId(result, 'tool:claude').message, /not valid JSON/)
+  assert.ok(!result.text.includes(secret) && !JSON.stringify(result.data).includes(secret))
+})

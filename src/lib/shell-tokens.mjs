@@ -108,6 +108,7 @@ class Parser {
   parseCommand() {
     const command = { type: 'command', words: [], assigns: [], redirects: [], heredocs: [] }
     let atStart = true
+    let afterTime = false // `time -p cmd`: the -p (and a -- after it) belong to the keyword
     for (;;) {
       this.skipBlanks()
       const char = this.peek()
@@ -120,6 +121,8 @@ class Parser {
       const start = this.pos
       const word = this.parseWord()
       if (atStart) {
+        if (afterTime && !word.quoted && (word.text === '-p' || word.text === '--')) continue
+        afterTime = !word.quoted && word.text === 'time'
         if (!word.quoted && KEYWORDS.has(word.text)) continue
         if (ASSIGNMENT.test(this.source.slice(start, Math.min(this.pos, start + 256)))) {
           command.assigns.push(word)
@@ -454,6 +457,16 @@ export function resolveWordPath(word, cwd, home) {
 
 const CHANGES_DIRECTORY = new Set(['cd', 'pushd'])
 
+/** The words of a command with `command` and `builtin` (and `command -p`, `--`) taken off the front: they run the builtin in this shell. */
+function withoutBuiltinPrefix(words) {
+  let index = 0
+  while (index < words.length && (words[index].text === 'command' || words[index].text === 'builtin') ) {
+    index++
+    while (index < words.length && (words[index].text === '-p' || words[index].text === '--')) index++
+  }
+  return words.slice(index)
+}
+
 /** The directories after `cd` or `pushd` ran in each of `cwds`; null where it cannot be told. */
 function directoriesAfterCd(command, cwds, home) {
   const [name, ...args] = command.words
@@ -491,8 +504,9 @@ export function commandsOf(root, { cwd = null, home = null } = {}) {
     found.push({ ...node, cwds })
     for (const word of [...node.assigns, ...node.words]) walkWord(word, cwds)
     walkExtras(node, cwds)
-    if (node.words.length === 0 || !(CHANGES_DIRECTORY.has(node.words[0].text) || node.words[0].text === 'popd')) return cwds
-    return [...new Set([...cwds, ...directoriesAfterCd(node, cwds, home)])]
+    const words = withoutBuiltinPrefix(node.words)
+    if (words.length === 0 || !(CHANGES_DIRECTORY.has(words[0].text) || words[0].text === 'popd')) return cwds
+    return [...new Set([...cwds, ...directoriesAfterCd({ words }, cwds, home)])]
   }
 
   const walkList = (list, cwds) => {

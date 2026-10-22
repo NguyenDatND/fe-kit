@@ -150,11 +150,13 @@ export async function buildPlan({ kitRoot, home, env, node, tools, mode = defaul
 /** Journal first, then the skills, then each file, then the record. `deps.beforeCommit(item)` and `deps.beforeRecord()` are seams for tests. */
 export async function applyPlan(plan, { stateDir, kitRoot, node, deps = {} }) {
   const changing = Object.values(plan.tools).flatMap((entry) => entry.files).filter((item) => item.action !== 'unchanged')
-  if (changing.length > 0) {
+  const skills = Object.entries(plan.tools).flatMap(([tool, entry]) => entry.skills.filter((skill) => skill.action !== 'unchanged').map((skill) => ({ tool, name: skill.name, mode: entry.mode })))
+  if (changing.length > 0 || skills.length > 0) {
     await writePrivateJson(journalPath(stateDir), {
       op: 'link',
       kitRoot,
       node,
+      skills,
       items: changing.map((item) => ({ tool: item.tool, file: item.file, kind: item.kind, beforeHash: item.before === null ? null : hashText(item.before), afterHash: hashText(item.after), added: item.added ?? null, createdFile: item.createdFile })),
     })
   }
@@ -193,6 +195,11 @@ export async function recover(stateDir) {
   state.node ??= journal.node ?? null
   const conflicts = []
   let done = 0
+  // A run that stopped after making skills and before it wrote the record: the skills are the kit's, whatever became of the files.
+  for (const skill of journal.op === 'link' ? journal.skills ?? [] : []) {
+    const known = state.tools[skill.tool] ?? { mode: skill.mode, skills: [], files: [] }
+    state.tools[skill.tool] = { ...known, skills: [...new Set([...known.skills, skill.name])] }
+  }
   for (const item of journal.items) {
     const current = await readTextIfExists(item.file).catch(() => undefined)
     const hash = current === undefined ? undefined : current === null ? null : hashText(current)
@@ -200,7 +207,7 @@ export async function recover(stateDir) {
       if (hash === item.afterHash) {
         const files = state.tools[item.tool]?.files ?? []
         const before = files.find((record) => record.file === item.file)
-        state.tools[item.tool] = { skills: state.tools[item.tool]?.skills ?? [], files: [...files.filter((record) => record !== before), recordFor({ ...item, after: current ?? '' }, before)] }
+        state.tools[item.tool] = { ...state.tools[item.tool], skills: state.tools[item.tool]?.skills ?? [], files: [...files.filter((record) => record !== before), recordFor({ ...item, after: current ?? '' }, before)] }
         done++
       } else if (hash !== item.beforeHash) conflicts.push({ file: item.file, message: 'was changed after an earlier fe-kit run stopped; anything fe-kit had added to it is not recorded, and unlink will leave it' })
     } else if (hash === item.afterHash) {

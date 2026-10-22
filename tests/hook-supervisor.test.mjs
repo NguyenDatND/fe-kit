@@ -13,6 +13,7 @@ const worker = async (t, source) => {
 }
 const answer = (exitCode, stdout = '') => `process.stdout.write(JSON.stringify({ exitCode: ${exitCode}, stdout: ${JSON.stringify(stdout)} }))`
 const input = (text) => Readable.from([Buffer.from(text)])
+const accepts = () => true
 const blocked = (result) => assert.deepEqual([result.exitCode, result.stdout], [2, ''])
 
 test('the deadline leaves the host time to read the answer', () => {
@@ -23,7 +24,7 @@ test('the deadline leaves the host time to read the answer', () => {
 test('what the worker answers is what the supervisor answers', async (t) => {
   const allow = await supervise({ input: input('{}'), workerPath: await worker(t, answer(0)), deadlineMs: 5000 })
   assert.deepEqual([allow.exitCode, allow.stdout], [0, ''])
-  const asked = await supervise({ input: input('{}'), workerPath: await worker(t, answer(0, '{"decision":"force_ask"}')), deadlineMs: 5000 })
+  const asked = await supervise({ input: input('{}'), workerPath: await worker(t, answer(0, '{"decision":"force_ask"}')), deadlineMs: 5000, accepts })
   assert.deepEqual([asked.exitCode, asked.stdout], [0, '{"decision":"force_ask"}'])
   const denied = await supervise({ input: input('{}'), workerPath: await worker(t, answer(2, '')), deadlineMs: 5000 })
   assert.deepEqual([denied.exitCode, denied.stdout, denied.stderr], [2, '', '']) // the worker's own answer, not a block
@@ -31,7 +32,7 @@ test('what the worker answers is what the supervisor answers', async (t) => {
 
 test('the worker is given what the tool sent, whole', async (t) => {
   const echo = await worker(t, `let t = ''; for await (const c of process.stdin) t += c; process.stdout.write(JSON.stringify({ exitCode: 0, stdout: t }))`)
-  const result = await supervise({ input: input('{"a":"é€"}'), workerPath: echo, deadlineMs: 5000 })
+  const result = await supervise({ input: input('{"a":"é€"}'), workerPath: echo, deadlineMs: 5000, accepts })
   assert.equal(result.stdout, '{"a":"é€"}')
 })
 
@@ -118,4 +119,32 @@ test('an input that fails while it is read, and a program that cannot be started
   blocked(missing)
   assert.match(missing.stderr, /could not be started/)
   assert.ok(performance.now() - began < 2500)
+})
+
+test('an answer the tool would not understand is a block, whatever the envelope says', async (t) => {
+  const seen = []
+  const accepting = (stdout, body) => (seen.push([stdout, body]), stdout === 'good')
+  const good = await supervise({ input: input('{"call":1}'), workerPath: await worker(t, answer(0, 'good')), deadlineMs: 5000, accepts: accepting })
+  assert.deepEqual([good.exitCode, good.stdout], [0, 'good'])
+  assert.deepEqual(seen, [['good', '{"call":1}']], 'it is asked with the answer and with what the tool sent')
+  blocked(await supervise({ input: input('{}'), workerPath: await worker(t, answer(0, 'not json')), deadlineMs: 5000, accepts: accepting }))
+  const silent = await supervise({ input: input('{}'), workerPath: await worker(t, answer(0, '')), deadlineMs: 5000, accepts: (stdout) => stdout === '' })
+  assert.deepEqual([silent.exitCode, silent.stdout], [0, ''])
+  blocked(await supervise({ input: input('{}'), workerPath: await worker(t, answer(0, '')), deadlineMs: 5000, accepts: () => false }))
+})
+
+test('with nothing said about what to accept, only silence is', async (t) => {
+  blocked(await supervise({ input: input('{}'), workerPath: await worker(t, answer(0, '{"decision":"deny"}')), deadlineMs: 5000 }))
+  const silent = await supervise({ input: input('{}'), workerPath: await worker(t, answer(0)), deadlineMs: 5000 })
+  assert.deepEqual([silent.exitCode, silent.stdout], [0, ''])
+})
+
+test('a worker that blocks by itself is not asked about: its own block stands', async (t) => {
+  const result = await supervise({ input: input('{}'), workerPath: await worker(t, answer(2, '')), deadlineMs: 5000, accepts: () => false })
+  assert.deepEqual([result.exitCode, result.stdout, result.stderr], [2, '', ''])
+})
+
+test('a check of the answer that throws is a block, not a crash', async (t) => {
+  blocked(await supervise({ input: input('{}'), workerPath: await worker(t, answer(0, 'x')), deadlineMs: 5000, accepts: () => { throw new Error('bug') } }))
+  blocked(await supervise({ input: input('{}'), workerPath: await worker(t, answer(0, 'x')), deadlineMs: 5000, accepts: () => 'yes' })) // only true is yes
 })

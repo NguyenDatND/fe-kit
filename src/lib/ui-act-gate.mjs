@@ -1,5 +1,6 @@
-import { open } from 'node:fs/promises'
+import { closeSync, openSync, writeSync } from 'node:fs'
 import { createInterface } from 'node:readline'
+import { ReadStream } from 'node:tty'
 import { UsageError } from './errors.mjs'
 
 /**
@@ -18,12 +19,20 @@ export function assertUiActEnabled(deps) {
   }
 }
 
-/** The terminal of the person at the keyboard, or null when this process has none (a tool's shell has not). */
-async function openTty() {
+/**
+ * The terminal of the person at the keyboard, or null when this process has none (a tool's shell has not). The input is a
+ * terminal stream and not a file handle: a file handle waits for a read that is under way before it closes, and a read of
+ * a terminal nobody types on never ends, so the time limit could not end the question.
+ */
+function openTty() {
+  let input
+  let output
   try {
-    const handle = await open('/dev/tty', 'r+')
-    return { input: handle.createReadStream({ autoClose: false }), output: handle.createWriteStream({ autoClose: false }), close: () => handle.close() }
+    input = openSync('/dev/tty', 'r')
+    output = openSync('/dev/tty', 'w')
+    return { input: new ReadStream(input), output: { write: (text) => writeSync(output, text) }, close: () => { closeSync(output) } }
   } catch {
+    for (const fd of [input, output]) if (fd !== undefined) closeSync(fd)
     return null
   }
 }
@@ -44,6 +53,7 @@ export async function confirmOnTerminal(message, { openTerminal = openTty, timeo
   } finally {
     clearTimeout(timer)
     lines.close()
+    terminal.input.destroy()
     await terminal.close()
   }
 }

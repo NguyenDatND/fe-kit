@@ -271,3 +271,49 @@ test('a glob below a link that leads into a store, and a node call whose code is
   assert.equal(decide('cat link/p/q/*', at(elsewhere)), 'deny')
   assert.equal(decide('node -e /x/bin/fe-kit.mjs link', context), 'allow')
 })
+
+test('`time` takes its own -p and `--`, so the command after them is still the command', async (t) => {
+  const { context } = await setup(t)
+  for (const command of ['time -p git push', 'time -p git commit -m x', 'time -p -- git push', 'time -p time -p git push', 'echo a | time -p git push']) assert.equal(decide(command, context), 'ask', command)
+  for (const command of ['time -p ls', 'time -p git status', 'time -p', 'time git status']) assert.equal(decide(command, context), 'allow', command)
+})
+
+test('`command cd` and `builtin cd` change the folder as plain cd does', async (t) => {
+  const { context } = await setup(t)
+  for (const command of ['command cd "$HOME/.config/fe-kit"; cat env', 'builtin cd ~/.config/fe-kit && cat env', 'command -p cd ~/.config/fe-kit; cat env', 'command cd -- ~/.config/fe-kit; cat env', 'builtin cd ~/.local/state/fe-kit; cat auth/p/t.json']) {
+    assert.equal(decide(command, context), 'deny', command)
+  }
+  assert.equal(decide('command cd src; cat a.ts', context), 'allow')
+  assert.equal(decide('command -v cd; cat a.ts', context), 'allow') // a query: nothing moves
+})
+
+test('a search with no folder given searches the folder it runs in, and that is a store or holds one', async (t) => {
+  const { home, at } = await setup(t)
+  const config = at(join(home, '.config'))
+  const denied = [
+    'rg TOKEN', 'rg -e TOKEN', "rg -g '*.json' TOKEN", 'rg -i -t js TOKEN', 'ag TOKEN', 'ack TOKEN', 'grep -r TOKEN', 'grep -rn TOKEN', 'grep -R TOKEN', 'grep --recursive TOKEN', 'grep -r -e TOKEN', 'egrep -r TOKEN',
+    'find', 'find -name env', 'find -type f -exec cat {} +', 'find ! -name x', 'timeout 5 rg TOKEN', 'env X=1 grep -r TOKEN',
+  ]
+  for (const command of denied) assert.equal(decide(command, config), 'deny', command)
+  for (const command of ['rg TOKEN', 'grep -r TOKEN', 'find -name env']) assert.equal(decide(command, at(home)), 'deny', `${command} from the home folder`)
+  assert.equal(decide('rg TOKEN', at(join(home, '.config/fe-kit'))), 'deny')
+
+  const allowed = [
+    'rg TOKEN project', 'rg -e TOKEN project', "rg -g '*.json' TOKEN project", 'grep -r TOKEN project', 'grep -r -e TOKEN project', 'grep TOKEN', 'grep TOKEN file.txt', 'grep -n TOKEN', 'find project -name env', 'find ./project', 'find project ! -name x',
+    'ls', 'echo TOKEN',
+  ]
+  for (const command of allowed) assert.equal(decide(command, config), 'allow', command)
+  assert.equal(decide('rg TOKEN', at(join(home, 'project'))), 'allow')
+  assert.equal(decide('find -name x', at(join(home, 'project'))), 'allow')
+  assert.equal(decide('find ~/Code -name x', at(home)), 'allow')
+  assert.equal(decide('grep -r TOKEN ~/Code', at(home)), 'allow')
+})
+
+test('a search with no folder given, in a folder that is not known, is asked about', async (t) => {
+  const { context } = await setup(t)
+  assert.equal(decide('cd $dir; rg TOKEN', context), 'ask')
+  assert.equal(decide('cd $dir; grep -r TOKEN', context), 'ask')
+  assert.equal(decide('cd $dir; find -name x', context), 'ask')
+  for (const command of ['cd $dir; find', 'cd $dir; find -type f', 'cd $dir; rg', 'cd $dir; grep -r', 'cd $dir; grep -r -i']) assert.equal(decide(command, context), 'ask', `${command}: no name in it to tell the folder is read`)
+  assert.equal(decide('cd $dir; rg TOKEN src', context), 'ask') // a name relative to an unknown folder, as before
+})
